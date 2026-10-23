@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>공유 폴더에 새 문서 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .box.err { border-color: #999; background: #eee; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .pair { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .side { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 8px 0; width: 280px; font-size: 13px; }
+  .side .h { color: #888; font-size: 12px; padding: 4px 12px; }
+  .side .r { padding: 3px 12px; display: flex; justify-content: space-between; }
+  .side .r.in { padding-left: 28px; }
+  .side .r.sel { background: #e6e6e2; }
+  .side .menu { margin: 2px 12px 4px 120px; border: 1px solid #999; border-radius: 6px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .side .menu div { padding: 4px 10px; }
+  .side .menu .new { font-weight: 600; }
+  .muted { color: #999; }
+  .cap { font-size: 12px; color: #888; margin-top: 6px; text-align: center; }
+  table { border-collapse: collapse; background: #fff; margin: 0 auto; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #eee; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>공유 폴더 안에 새 문서 — 초대받은 사람이 만들기</h1>
+<p class="sub">요청: "내가 공유한 폴더에서 다른 사람이 위키링크로 새 문서 생성해도 나머지 사람들에겐 안보임"<br>
+지금: 새 문서는 늘 만든 사람 소유 + 만든 사람 최상위(<code>useDocNavigation.ts:285</code>, <code>worker/docs.ts:217</code>) → 소유자·다른 초대자 목록에 안 나옴<br>
+정한 것: 소유자 = 폴더 소유자 · 편집 초대만 · 온라인만 · 용량 초과면 거절 · 소유자 알림 없음 · 만드는 사람 템플릿</p>
+
+<h2>1. 입구 두 곳</h2>
+<div class="pair">
+  <div class="col">
+    <div class="side">
+      <div class="h">문서</div>
+      <div class="r">내 폴더</div>
+      <div class="h">공유받음 ▾</div>
+      <div class="r sel"><span>📁 수업</span><span class="muted">⋯</span></div>
+      <div class="menu"><div class="new">새 문서</div><div>공유에서 나가기</div></div>
+      <div class="r in"><span>1주차</span><span class="muted">a@…</span></div>
+      <div class="r in"><span>2주차</span><span class="muted">a@…</span></div>
+      <div class="r"><span>따로 받은 문서</span><span class="muted">c@…</span></div>
+    </div>
+    <div class="cap">입구 A — 공유받음 폴더 이름 줄 ⋯ · 우클릭 · 길게 누르기<br>편집 초대 폴더에만 <b>새 문서</b>. 보기 초대 폴더는 지금처럼 나가기 하나</div>
+  </div>
+  <div class="col">
+    <div class="box" style="width:280px;text-align:left">
+      <b>1주차</b> (수업 폴더, 편집 권한)<br><br>
+      다음 시간: <u>[[2주차 과제]]</u> ← 아직 없는 문서
+    </div>
+    <div class="cap">입구 B — 공유 폴더 문서 안 위키링크 클릭<br>(없는 문서면 새로 만드는 지금 흐름)</div>
+  </div>
+</div>
+
+<h2>2. 판정 — 어디에, 누구 것으로</h2>
+<div class="flow">
+  <div class="box q">원본 문서(또는 고른 폴더)가 내가 <b>편집</b> 초대받은 공유 폴더 안인가?</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">아니오 — 내 폴더</span><div class="box">지금 흐름 그대로<small>내 소유, 내 폴더</small></div></div>
+    <div class="col"><span class="label">아니오 — 보기 초대 / 문서 하나만 초대</span>
+      <div class="box">내 최상위에 내 문서로 만듦<small>info 알림 <code>공유 폴더에 만들 권한이 없어 내 문서에 만들었습니다.</code></small></div>
+      <div class="cap">문구는 명세에서 확정</div>
+    </div>
+    <div class="col"><span class="label">예</span>
+      <div class="box q">온라인인가?</div>
+      <div class="arrow"></div>
+      <div class="branch">
+        <div class="col"><span class="label">아니오</span><div class="box err">만들지 않음<small>error 알림 <code>공유 폴더에는 온라인일 때만 만들 수 있습니다.</code></small></div></div>
+        <div class="col"><span class="label">예</span>
+          <div class="box">서버에 만들기 요청<small>서버가 초대 권한을 다시 확인</small></div>
+          <div class="arrow"></div>
+          <div class="branch">
+            <div class="col"><span class="label">소유자 용량·문서 수 초과</span><div class="box err">만들지 않음<small>error <code>공유 폴더 주인의 저장 공간이 가득 찼습니다.</code></small></div></div>
+            <div class="col"><span class="label">권한이 그사이 사라짐</span><div class="box err">만들지 않음<small>error 알림, 목록 다시 읽기</small></div></div>
+            <div class="col"><span class="label">성공</span><div class="box key">문서 owner = 폴더 소유자<small>폴더 = 그 공유 폴더 · 내 템플릿으로 내용 채움</small></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>3. 만든 뒤 각자 보이는 것</h2>
+<table>
+  <tr><th>누구</th><th>어디에</th><th>할 수 있는 것</th></tr>
+  <tr><td>만든 사람 (B, 편집 초대)</td><td>바로 열림, 제목 입력에 포커스. 사이드바 <code>공유받음 › 수업</code> 아래 줄</td><td>편집. 옮기기·고정·삭제는 못 함 (공유받은 문서와 같음)</td></tr>
+  <tr><td>소유자 (A)</td><td>다음 목록 갱신(45초~ / 창 포커스) 때 <code>수업</code> 폴더 안</td><td>모두. 내 용량에 잡힘</td></tr>
+  <tr><td>다른 초대자 (C)</td><td>다음 목록 갱신 때 <code>공유받음 › 수업</code> 아래</td><td>초대 권한대로</td></tr>
+</table>
+<p class="cap">B 가 공유에서 나가도 문서는 A 의 폴더에 남음</p>
+
+<h2>4. 정한 것 (2026-10-24, 둘 다 추천안)</h2>
+<table>
+  <tr><th>#</th><th>질문</th><th>결정</th></tr>
+  <tr><td>①</td><td>사이드바 공유받음은 <b>문서가 하나라도 있는 폴더만</b> 그림(<code>Sidebar.tsx:595</code>, 문서의 viaFolder 로 묶음). 빈 폴더를 공유받으면 입구 A 가 없음</td><td>빈 공유 폴더도 이름 줄을 그림 (서버 /api/shared 응답에 폴더 목록·권한 추가)</td></tr>
+  <tr><td>②</td><td>공유받음은 하위 폴더 없이 초대 폴더 아래 평평하게 그림. 하위 폴더 안 문서의 위키링크로 만들면 그 하위 폴더에 들어감</td><td>원본 문서와 같은 폴더(하위 폴더 그대로). 입구 A 는 초대 폴더 바로 아래</td></tr>
+</table>
+</body>
+</html>
