@@ -506,6 +506,15 @@ export default function KanbanBoard({
                 className={`kanban-lane${laneHeld ? ' kanban-lane--dragging' : ''}${renaming && editing.added ? ' kanban-lane--added' : ''}`}
                 aria-label={name}
               >
+                {!readOnly && !renaming && (
+                  <div
+                    className="kanban-lane-grip"
+                    aria-hidden="true"
+                    title="끌어서 칸 옮기기"
+                    onPointerDown={(e) => drag.start(e, { kind: 'lane', lane: laneIndex }, lane.headingFrom)}
+                    onContextMenu={drag.blockLongPressMenu}
+                  />
+                )}
                 <header
                   className="kanban-lane-head"
                   onPointerDown={readOnly || renaming ? undefined : (e) => drag.start(e, { kind: 'lane', lane: laneIndex }, lane.headingFrom)}

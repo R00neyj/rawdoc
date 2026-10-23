@@ -115,6 +115,42 @@
   }
 }
 
+/* 칸 위 가운데 끌기 손잡이 — 아래 음수 margin 은 칸 gap 을 지운다 (tweak 2026-10-24) */
+.kanban-lane-grip {
+  align-self: center;
+  flex: none;
+  width: 40px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  margin: -8px 0 -8px;
+  border-radius: 7px;
+  cursor: grab;
+  opacity: 0.5;
+  transition: opacity 120ms, background-color 120ms;
+}
+
+/* 점 3×2 = 6개 */
+.kanban-lane-grip::before {
+  content: '';
+  width: 18px;
+  height: 12px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--ink) 35%, transparent) 1.5px, transparent 2px) 0 0 / 6px 6px repeat;
+}
+
+.kanban-lane:hover .kanban-lane-grip,
+.kanban-lane-grip:active {
+  opacity: 1;
+}
+
+.kanban-lane-grip:hover {
+  background-color: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.kanban-lane--dragging .kanban-lane-grip {
+  cursor: grabbing;
+}
+
 .kanban-lane-head {
   display: flex;
   align-items: center;
