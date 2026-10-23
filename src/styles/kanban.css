@@ -218,6 +218,18 @@
   white-space: pre-wrap;
 }
 
+/* 하위 줄 — 들여쓴 칸 수만큼 안으로, 불릿 뒤로 감긴다 (small 2026-10-23) */
+.kanban-detail-line {
+  display: flex;
+  gap: 0.4em;
+  min-height: 1.5em;
+  padding-left: calc(var(--detail-indent, 0) * 0.5em);
+}
+
+.kanban-detail-mark {
+  flex: none;
+}
+
 /* 카드 글자 속 인라인 문법 — 보기 모드(markdown.css)와 같은 토큰 */
 :is(.kanban-card-text, .kanban-card-detail) a {
   color: var(--md-link);

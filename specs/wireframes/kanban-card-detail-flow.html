@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>칸반 카드 세부사항 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; font: 13px/1.6 ui-monospace, monospace; margin: 0; text-align: left; }
+  .pair { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .card { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 8px 12px; width: 260px; text-align: left; }
+  .card .detail { font-size: 12px; color: #666; margin-top: 4px; }
+  .card .detail div { padding-left: 14px; text-indent: -10px; }
+  .card .input { border: 2px solid #333; border-radius: 6px; padding: 6px 8px; font: 13px/1.6 ui-monospace, monospace; white-space: pre; }
+  .cap { font-size: 12px; color: #888; margin-top: 6px; text-align: center; }
+  table { border-collapse: collapse; background: #fff; margin: 0 auto; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #eee; font-weight: 600; }
+  .rec { color: #333; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>칸반 카드 세부사항 — 보드에서 쓰기 · 불릿 표시</h1>
+<p class="sub">요청: "칸반 체크카드 아닐때 <code>- 내용 / &nbsp;&nbsp;&nbsp;&nbsp;- 내용 세부사항</code> 이런식으로 작성이 안됨" · "세부사항 작성하려면 원문 편집으로 넘어가야함. 렌더는 불릿포인트 안되는거 빼고는 괜찮음" → 여러 줄 입력칸 선택<br>
+지금: F-2141 "하위 줄은 보드에서 고치지 않는다", F-2140 하위 줄은 "글자 그대로" 표시. 이 두 줄을 바꾸는 small change</p>
+
+<h2>1. 들어가기 — 지금과 같은 입구</h2>
+<div class="flow">
+  <div class="row">
+    <div class="box">카드 더블클릭 · 포커스 후 Enter / F2<small>카드 우클릭 → 고치기</small></div>
+    <div class="box">칸 아래 <b>+ 카드 추가</b></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">여러 줄 입력칸 (BoardInput, 한 줄 제한 해제)<small>첫 줄 = 카드 글자, 둘째 줄부터 = 세부사항(들여쓰기 뗀 모양)</small></div>
+</div>
+
+<h2>2. 입력칸 안 키</h2>
+<div class="pair">
+  <div class="col">
+    <div class="card">
+      <div class="input">내용
+- 내용 세부사항
+- ▏</div>
+    </div>
+    <div class="cap">체크 카드면 체크 칸은 입력칸 왼쪽 그대로</div>
+  </div>
+  <table>
+    <tr><th>키</th><th>동작</th></tr>
+    <tr><td>Enter</td><td>저장하고 닫기 (지금과 같음). 자동완성 후보가 열려 있으면 후보 고르기</td></tr>
+    <tr><td>Shift+Enter</td><td>줄바꿈. 지금 줄이 <code>- </code> 로 시작하면 다음 줄도 <code>- </code> 로 이어 줌(빈 항목에서 한 번 더 누르면 <code>- </code> 지움)</td></tr>
+    <tr><td>Tab / Shift+Tab</td><td>정할 것 ②</td></tr>
+    <tr><td>Esc</td><td>취소</td></tr>
+    <tr><td>입력칸 밖 클릭(blur)</td><td>저장</td></tr>
+    <tr><td>여러 줄 붙여넣기</td><td>줄 그대로 들어감 (지금은 공백으로 바뀜)</td></tr>
+  </table>
+</div>
+
+<h2>3. 저장 — 원문에 쓰는 모양</h2>
+<div class="flow">
+  <div class="box q">첫 줄이 비었나?</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">비었음</span><div class="box">고치기: 저장 안 하고 원래대로<small>추가: 카드 안 만듦 (지금과 같음)</small></div></div>
+    <div class="col"><span class="label">글자 있음</span>
+      <div class="box">첫 줄 → 카드 줄 글자<br>나머지 줄 → 카드 아래 하위 줄로 통째로 바꿈<small>각 줄 앞에 들여쓰기(정할 것 ①) · 끝 빈 줄은 버림 · 세부를 다 지우면 하위 줄도 지움</small></div>
+    </div>
+  </div>
+  <div class="arrow"></div>
+  <div class="pair">
+    <pre>입력칸
+내용
+- 내용 세부사항
+  - 더 깊은 줄</pre>
+    <pre>원문 (체크 없는 카드)
+- 내용
+    - 내용 세부사항
+      - 더 깊은 줄</pre>
+    <pre>원문 (체크 카드)
+- [ ] 내용
+    - 내용 세부사항
+      - 더 깊은 줄</pre>
+  </div>
+  <div class="cap">되돌리기(Ctrl+Z) 한 번에 카드 글자·세부가 함께 돌아감. 다른 사람이 동시에 고쳐도 카드 묶음 범위만 바꿈</div>
+</div>
+
+<h2>4. 보드 표시 — 불릿</h2>
+<div class="pair">
+  <div class="col">
+    <div class="card">내용
+      <div class="detail"><div>- 내용 세부사항</div><div>&nbsp;&nbsp;- 더 깊은 줄</div></div>
+    </div>
+    <div class="cap">지금</div>
+  </div>
+  <div class="col">
+    <div class="card">내용
+      <div class="detail"><div>• 내용 세부사항</div><div style="padding-left:28px">◦ 더 깊은 줄</div></div>
+    </div>
+    <div class="cap">바뀐 뒤 — <code>-</code>·<code>*</code>·<code>+</code> 줄은 불릿, 들여쓴 만큼 안으로, 줄이 넘치면 불릿 뒤에 맞춰 감김</div>
+  </div>
+</div>
+
+<h2>5. 정할 것</h2>
+<table>
+  <tr><th>#</th><th>질문</th><th>추천</th><th>다른 길</th></tr>
+  <tr><td>①</td><td>새로 쓰는 세부 줄 들여쓰기</td><td class="rec">카드에 이미 하위 줄이 있으면 그 들여쓰기 유지, 없으면 편집기 설정 <code>들여쓰기</code>(2·4칸)를 따름</td><td>늘 4칸 고정</td></tr>
+  <tr><td>②</td><td>입력칸 안 Tab</td><td class="rec">세부 줄에서 Tab = 그 줄 한 단계 들여쓰기, Shift+Tab = 내어쓰기. 첫 줄(카드 글자)에서는 지금처럼 포커스 이동</td><td>늘 포커스 이동(들여쓰기는 공백 직접 입력)</td></tr>
+  <tr><td>③</td><td>세부의 <code>- [ ]</code> 줄 표시</td><td class="rec">불릿 대신 누를 수 없는 체크 표시(☐/☑). 체크 켜고 끄기는 원문·입력칸에서</td><td>다른 불릿과 똑같이 • 로</td></tr>
+</table>
+</body>
+</html>

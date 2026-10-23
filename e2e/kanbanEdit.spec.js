@@ -70,8 +70,10 @@ test('F-2141 E2 칸 이름·체크·카드 글자·칸 추가가 그 자리만 �
 
   await lane(page, '해야 할 일').locator('.kanban-card', { hasText: '첫 카드' }).dblclick()
   const cardInput = board(page).getByRole('textbox', { name: '카드 내용' })
-  await expect(cardInput).toHaveText('첫 카드')
-  await cardInput.fill('첫 카드 고침')
+  await expect(cardInput.locator('.cm-line')).toHaveText(['첫 카드', '설명 한 줄'])
+  await cardInput.press('Control+Home')
+  await cardInput.press('End')
+  await page.keyboard.type(' 고침')
   await cardInput.press('Enter')
   await expect(lane(page, '해야 할 일').locator('.kanban-card').first()).toBeFocused()
 
@@ -161,4 +163,25 @@ test('F-2141 E3 실시간 두 창 — 카드 추가가 상대 보드에 보이�
     await a.context.close()
     await b.context.close()
   }
+})
+
+test('카드 세부사항 — 보드 입력칸에서 Shift+Enter·Tab 으로 쓴 하위 줄이 원문에 들여써 들어가고 새로고침 뒤 불릿으로 남는다 (small 2026-10-23)', async ({ page }) => {
+  await openApp(page)
+  const docId = await importMarkdown(page, { name: '보드 문서.md', content: BOARD_DOC })
+  await lane(page, '할 일').locator('.kanban-card-text', { hasText: '첫 카드' }).dblclick()
+  const input = lane(page, '할 일').getByRole('textbox', { name: '카드 내용' })
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.press('Shift+Enter')
+  await page.keyboard.type('- 세부')
+  await page.keyboard.press('Shift+Enter')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('깊게')
+  await page.keyboard.press('Enter')
+  await expect(input).toHaveCount(0)
+  await expect.poll(async () => (await readSavedContent(page, docId)).content).toContain('- 첫 카드\n  설명 한 줄\n  - 세부\n      - 깊게\n- [ ] 체크 카드\n')
+
+  await page.reload()
+  const detail = lane(page, '할 일').locator('.kanban-card-detail .kanban-detail-line')
+  await expect(detail).toHaveText(['설명 한 줄', '•세부', '◦깊게'])
 })

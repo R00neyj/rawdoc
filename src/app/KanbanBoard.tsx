@@ -1,7 +1,7 @@
 // 칸반 보드 화면 — 숨긴 편집기의 EditorState 를 읽어 그리고, 고치기는 applyKanban 한 길로 쓴다 (F-2140 3장, F-2141 3장, F-2142)
 import {
   Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
-  type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
+  type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import type { WikiContext } from '../editor/preview/wikiLinks'
@@ -9,7 +9,7 @@ import { renderMarkdownInline } from '../viewer/renderMarkdown'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
 import {
-  NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, moveCardChanges, moveLaneChanges, parseKanban, removeCardChange, removeLaneChange,
+  NEW_LANE_TITLE, addCardChange, addLaneChange, cardDraft, editCardChange, kanbanDetailLines, moveCardChanges, moveLaneChanges, parseKanban, removeCardChange, removeLaneChange,
   removeCheckChange, renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
 } from '../lib/kanban'
 import { IconMore } from './icons'
@@ -59,6 +59,7 @@ type Moving = { pos: number; el: HTMLElement | null; lost?: () => void }
 const LOST_MESSAGE = '다른 곳에서 지워져 고치지 못했습니다.'
 const UNNAMED_LANE = '이름 없는 칸'
 const ARROWS: Partial<Record<string, KanbanDir>> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
+const detailIndent = () => ' '.repeat(Number(getPref('md.indent', '4')))
 
 export default function KanbanBoard({
   handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, wikiContext, apply, showNotice, focusRef, onOpenSettings,
@@ -213,7 +214,7 @@ export default function KanbanBoard({
       lost()
       return false
     }
-    apply(addCardChange(at.text, at.lane, value, getPref('md.kanbanNewCardCheck', 'on') === 'on'), 'kanban.add')
+    apply(addCardChange(at.text, at.lane, value, getPref('md.kanbanNewCardCheck', 'on') === 'on', detailIndent()), 'kanban.add')
     return true
   }
 
@@ -228,7 +229,7 @@ export default function KanbanBoard({
   const finishCard = (value: string | null, refocus: boolean) => {
     const at = currentCard()
     if (!at) return lost()
-    if (value !== null) apply(editCardChange(at.text, at.pos, value), 'kanban.edit')
+    if (value !== null) apply(editCardChange(at.text, at.pos, value, detailIndent()), 'kanban.edit')
     close(refocus ? { lane: at.lane, card: at.card, what: 'card' } : null)
   }
 
@@ -301,7 +302,7 @@ export default function KanbanBoard({
   const menuActions: KanbanMenuActions = {
     editCard: (lane, card) => {
       const found = lanes[lane]?.cards[card]
-      if (found) startCardEdit(found.from, found.text)
+      if (found) startCardEdit(found.from, cardDraft(found))
     },
     toggleCheck: (lane, card) => {
       const pos = snapCardPos(lane, card)
@@ -573,13 +574,13 @@ export default function KanbanBoard({
                           onPointerDown={readOnly || cardEditing ? undefined : (e) => drag.start(e, { kind: 'card', lane: laneIndex, card: cardIndex }, card.from)}
                           onContextMenu={drag.blockLongPressMenu}
                           onDoubleClick={(e) => {
-                            if (!cardEditing && !(e.target instanceof Element && e.target.closest('input, a, button, .cm-editor'))) startCardEdit(card.from, card.text)
+                            if (!cardEditing && !(e.target instanceof Element && e.target.closest('input, a, button, .cm-editor'))) startCardEdit(card.from, cardDraft(card))
                           }}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget || e.nativeEvent.isComposing) return
                             if (e.key !== 'Enter' && e.key !== 'F2') return onCardArrow(e, { lane: laneIndex, card: cardIndex }, card.from)
                             e.preventDefault()
-                            startCardEdit(card.from, card.text)
+                            startCardEdit(card.from, cardDraft(card))
                           }}
                         >
                           {card.done !== null && (
@@ -597,6 +598,7 @@ export default function KanbanBoard({
                               className="kanban-card-input"
                               label="카드 내용"
                               value={editing.value}
+                              multiline={{ indent: detailIndent() }}
                               wikiContext={wikiContext}
                               {...inputHandlers}
                               onEnter={() => finishCard(draftRef.current?.value ?? '', true)}
@@ -606,11 +608,19 @@ export default function KanbanBoard({
                           ) : (
                             <span className="kanban-card-text" dangerouslySetInnerHTML={{ __html: renderMarkdownInline(card.text, { resolveWikiLink }) }} />
                           )}
-                          {card.detail.length > 0 && (
-                            <div
-                              className="kanban-card-detail"
-                              dangerouslySetInnerHTML={{ __html: card.detail.map((line) => renderMarkdownInline(line, { resolveWikiLink })).join('\n') }}
-                            />
+                          {!cardEditing && card.detail.length > 0 && (
+                            <div className="kanban-card-detail">
+                              {kanbanDetailLines(card.detail).map((line, i) => (
+                                <div key={i} className="kanban-detail-line" style={{ '--detail-indent': line.indent } as CSSProperties}>
+                                  {line.kind !== 'text' && (
+                                    <span className="kanban-detail-mark" aria-hidden="true">
+                                      {line.kind === 'check' ? (line.done ? '☑' : '☐') : line.indent > 0 ? '◦' : '•'}
+                                    </span>
+                                  )}
+                                  <span dangerouslySetInnerHTML={{ __html: renderMarkdownInline(line.text, { resolveWikiLink }) }} />
+                                </div>
+                              ))}
+                            </div>
                           )}
                           {!readOnly && !cardEditing && (
                             <MoreButton
@@ -634,17 +644,18 @@ export default function KanbanBoard({
                     label="새 카드"
                     placeholder="카드 내용"
                     value={editing.value}
+                    multiline={{ indent: detailIndent() }}
                     wikiContext={wikiContext}
                     {...inputHandlers}
                     onEnter={() => {
                       const value = draftRef.current?.value ?? ''
-                      if (value.trim() !== '' && addCard(value)) setDraft({ mode: 'add', value: '' })
+                      if (value.split('\n')[0].trim() !== '' && addCard(value)) setDraft({ mode: 'add', value: '' })
                     }}
                     onEscape={() => close({ lane: laneIndex, what: 'add' })}
                     onBlur={() => {
                       if (!draftRef.current) return
                       const value = draftRef.current.value
-                      if (value.trim() === '' || addCard(value)) close(null)
+                      if (value.split('\n')[0].trim() === '' || addCard(value)) close(null)
                     }}
                   />
                 ) : (

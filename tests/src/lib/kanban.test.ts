@@ -4,7 +4,9 @@ import {
   KANBAN_NEW_DOC_TEXT,
   addCardChange,
   addLaneChange,
+  cardDraft,
   editCardChange,
+  kanbanDetailLines,
   isKanbanDoc,
   kanbanDoneChange,
   kanbanDoneLane,
@@ -378,5 +380,49 @@ describe('완료 칸으로 옮기면 체크 칸을 맞춘다 (small 2026-10-14)'
     const pinned = t.replace('kanban: true\n', 'kanban: true\nkanban-done: B\n')
     expect(move([0, 0], [1, 0], pinned)).toContain('## B\n- [x] a\n- [ ] d\n')
     expect(move([1, 0], [2, 0], pinned)).toContain('## 끝\n- [ ] d\n- [x] e\n')
+  })
+})
+
+describe('카드 세부사항을 보드에서 쓴다 (small 2026-10-23)', () => {
+  const t = '## A\n- a\n- [ ] b\n   - b1\n\n   - b2\n- c\n'
+  const cards = () => parseKanban(t)[0].cards
+  it('cardDraft 는 첫 줄 카드 글자, 다음 줄부터 들여쓰기 뗀 하위 줄', () => {
+    expect(cardDraft(cards()[0])).toBe('a')
+    expect(cardDraft(cards()[1])).toBe('b\n- b1\n\n- b2')
+  })
+  it('하위 줄 없는 카드에 세부를 쓰면 주어진 들여쓰기로 붙인다', () => {
+    expect(apply(t, editCardChange(t, cards()[0].from, 'a\n- 세부\n  - 더 깊게', '    '))).toBe('## A\n- a\n    - 세부\n      - 더 깊게\n- [ ] b\n   - b1\n\n   - b2\n- c\n')
+  })
+  it('이미 하위 줄이 있으면 그 들여쓰기를 따르고 통째로 바꾼다', () => {
+    expect(apply(t, editCardChange(t, cards()[1].from, 'bb\n- b1\n- 새 줄', '    '))).toBe('## A\n- a\n- [ ] bb\n   - b1\n   - 새 줄\n- c\n')
+  })
+  it('세부를 모두 지우면 하위 줄도 지운다. 앞뒤 빈 줄은 버린다', () => {
+    expect(apply(t, editCardChange(t, cards()[1].from, 'b\n\n', '    '))).toBe('## A\n- a\n- [ ] b\n- c\n')
+    expect(apply(t, editCardChange(t, cards()[2].from, 'c\n\n- x\n\n', '  '))).toBe('## A\n- a\n- [ ] b\n   - b1\n\n   - b2\n- c\n  - x\n')
+  })
+  it('바뀐 것이 없거나 첫 줄이 비면 null', () => {
+    expect(editCardChange(t, cards()[1].from, 'b\n- b1\n\n- b2', '    ')).toBeNull()
+    expect(editCardChange(t, cards()[1].from, ' \n- b1', '    ')).toBeNull()
+  })
+  it('글자만 바뀌면 카드 글자 구간만 바꾼다', () => {
+    expect(editCardChange(t, cards()[1].from, 'bb\n- b1\n\n- b2', '    ')).toEqual({ from: cards()[1].textFrom, to: cards()[1].textTo, insert: 'bb' })
+  })
+  it('addCardChange 도 여러 줄이면 하위 줄을 붙인다', () => {
+    expect(apply(t, addCardChange(t, 0, 'n\n- n1', true, '  '))).toBe('## A\n- a\n- [ ] b\n   - b1\n\n   - b2\n- c\n- [ ] n\n  - n1\n')
+    expect(addCardChange(t, 0, '\n- n1', false, '  ')).toBeNull()
+  })
+  it('kanbanDetailLines 는 목록 줄을 불릿·체크로, 펜스 안은 글자로 나눈다', () => {
+    expect(kanbanDetailLines(['- 세부', '  * 깊게', '\t+ 탭', '- [ ] 할 것', '- [x] 한 것', '그냥 글', '', '```', '- 코드', '```'])).toEqual([
+      { indent: 0, kind: 'bullet', done: false, text: '세부' },
+      { indent: 2, kind: 'bullet', done: false, text: '깊게' },
+      { indent: 4, kind: 'bullet', done: false, text: '탭' },
+      { indent: 0, kind: 'check', done: false, text: '할 것' },
+      { indent: 0, kind: 'check', done: true, text: '한 것' },
+      { indent: 0, kind: 'text', done: false, text: '그냥 글' },
+      { indent: 0, kind: 'text', done: false, text: '' },
+      { indent: 0, kind: 'text', done: false, text: '```' },
+      { indent: 0, kind: 'text', done: false, text: '- 코드' },
+      { indent: 0, kind: 'text', done: false, text: '```' },
+    ])
   })
 })

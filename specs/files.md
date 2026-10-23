@@ -37,7 +37,7 @@
 |`src/app/account.ts`|로그인 상태를 서버에 물어보고 로그인·로그아웃 주소를 정함|
 |`src/app/accountDelete.ts`|계정 삭제 요청과 삭제 뒤 이 기기 정리 순서를 처리함|
 |`src/app/AccountDeleteDialog.tsx`|계정 삭제 창. 삭제될 내용 확인, 다시 로그인, 확인 문구 입력 후 삭제함|
-|`src/app/BoardInput.tsx`|칸반 보드의 칸 이름·카드 글자 입력칸. 편집기처럼 짝 기호와 `[[` 문서 제목 자동완성을 씀|
+|`src/app/BoardInput.tsx`|칸반 보드의 칸 이름·카드 입력칸. 편집기처럼 짝 기호와 `[[` 문서 제목 자동완성을 쓰고, 카드 입력칸은 여러 줄로 세부사항까지 받음|
 |`src/app/AccountMenu.tsx`|사이드바 아래 계정 메뉴. 이메일·사용량을 보여주고 로그아웃 등을 고름|
 |`src/app/accountTrigger.ts`|사이드바 아래 계정 자리에 로그인 버튼과 계정 메뉴 중 무엇을 띄울지 정함|
 |`src/app/ApiTokensDialog.tsx`|명령줄 도구용 접속 열쇠(API 토큰)를 만들고 지우는 창|

@@ -1,10 +1,11 @@
-// 칸반 보드 한 줄 입력칸 — CM6 로 편집기와 같은 자동 짝·`[[` 자동완성을 쓴다 (small 2026-10-15)
+// 칸반 보드 입력칸 — CM6 로 편집기와 같은 자동 짝·`[[` 자동완성을 쓴다 (small 2026-10-15)
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { acceptCompletion, completionStatus } from '@codemirror/autocomplete'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
-import { history, historyKeymap } from '@codemirror/commands'
+import { history, historyKeymap, indentLess, indentMore } from '@codemirror/commands'
+import { indentUnit } from '@codemirror/language'
 
 import { autoPair } from '../editor/autoPair'
 import { wikiContextField, type WikiContext } from '../editor/preview/wikiLinks'
@@ -16,6 +17,8 @@ type BoardInputProps = {
   placeholder?: string
   value: string
   select?: boolean
+  // 카드 입력칸 — Shift+Enter 줄바꿈, 둘째 줄부터 Tab 들여쓰기 (small 2026-10-23)
+  multiline?: { indent: string }
   wikiContext?: WikiContext
   onChange: (value: string) => void
   onComposing: (composing: boolean) => void
@@ -33,7 +36,28 @@ const singleLine = EditorState.transactionFilter.of((tr) => {
   return [tr, { changes, sequential: true }]
 })
 
-export default function BoardInput({ className, label, placeholder, value, select, wikiContext, onChange, onComposing, onEnter, onEscape, onBlur }: BoardInputProps) {
+const LIST_MARK_RE = /^([ \t]*)([-*+])[ \t]+(\[[ xX]\][ \t]+)?/
+
+// 목록 줄이면 같은 표시로 잇고, 빈 항목이면 표시를 지운다
+function newlineContinueList(view: EditorView): boolean {
+  const { state } = view
+  const range = state.selection.main
+  const line = state.doc.lineAt(range.head)
+  const m = LIST_MARK_RE.exec(line.text)
+  if (m && range.empty && m[0].length === line.length) {
+    view.dispatch({ changes: { from: line.from, to: line.to }, selection: { anchor: line.from } })
+    return true
+  }
+  const insert = '\n' + (m ? `${m[1]}${m[2]} ${m[3] ? '[ ] ' : ''}` : '')
+  view.dispatch(state.update(state.replaceSelection(insert), { scrollIntoView: true, userEvent: 'input' }))
+  return true
+}
+
+// 첫 줄(카드 글자)이 걸리면 들여쓰지 않고 Tab 을 포커스 이동에 넘긴다
+const detailOnly = (run: (view: EditorView) => boolean) => (view: EditorView) =>
+  view.state.selection.ranges.every((r) => view.state.doc.lineAt(Math.min(r.from, r.to)).number > 1) && run(view)
+
+export default function BoardInput({ className, label, placeholder, value, select, multiline, wikiContext, onChange, onComposing, onEnter, onEscape, onBlur }: BoardInputProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const composingRef = useRef(false)
@@ -64,22 +88,30 @@ export default function BoardInput({ className, label, placeholder, value, selec
         doc: value,
         selection: select ? EditorSelection.range(0, value.length) : EditorSelection.cursor(value.length),
         extensions: [
-          singleLine,
+          multiline ? indentUnit.of(multiline.indent) : singleLine,
           // 긴 글이 칸 폭을 넘어 보드를 옆으로 키우지 않게 칸 안에서 접는다 (tweak 2026-10-15)
           EditorView.lineWrapping,
           history(),
           autoPair(),
-          markdown(),
+          // 기본 Enter 목록 이어쓰기가 저장 Enter 를 가로채지 않게 끈다
+          markdown({ addKeymap: false }),
           wikiContext ? wikiContextField.init(() => wikiContext) : wikiContextField,
           wikiComplete(),
           keymap.of([
             // 후보 창이 열려 있으면 Enter 는 후보 고르기 몫 — 열린 직후 75ms(interactionDelay)에 눌러도 카드로 넘기지 않는다
             { key: 'Enter', run: (view) => (completionStatus(view.state) === 'active' ? (acceptCompletion(view), true) : key(() => handlers.current.onEnter())(view)) },
             { key: 'Escape', run: key(() => handlers.current.onEscape()) },
+            ...(multiline
+              ? [
+                  { key: 'Shift-Enter', run: (view: EditorView) => !view.composing && newlineContinueList(view) },
+                  { key: 'Tab', run: detailOnly(indentMore) },
+                  { key: 'Shift-Tab', run: detailOnly(indentLess) },
+                ]
+              : []),
             ...historyKeymap,
           ]),
           placeholder ? placeholderExt(placeholder) : [],
-          EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'false' }),
+          EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': multiline ? 'true' : 'false' }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) handlers.current.onChange(u.state.doc.toString())
           }),

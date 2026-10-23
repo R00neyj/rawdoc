@@ -275,11 +275,28 @@ export function moveCardChanges(
   return [del, ins].sort((a, b) => a.from - b.from)
 }
 
-export function addCardChange(text: string, lane: number, cardText: string, check = false): KanbanChange | null {
-  const t = cardText.trim()
+// 입력칸 글 — 첫 줄은 카드 글자, 다음 줄부터 세부(앞뒤 빈 줄·줄 끝 공백 뗌) (small 2026-10-23)
+function splitDraft(value: string): { first: string; detail: string[] } {
+  const [head, ...rest] = value.split('\n')
+  const detail = rest.map((line) => line.trimEnd())
+  while (detail.length > 0 && detail[0] === '') detail.shift()
+  while (detail.length > 0 && detail[detail.length - 1] === '') detail.pop()
+  return { first: head.trim(), detail }
+}
+
+function detailBody(detail: string[], indent: string): string {
+  return detail.map((line) => '\n' + (line === '' ? '' : indent + line)).join('')
+}
+
+export function cardDraft(card: KanbanCard): string {
+  return [card.text, ...card.detail].join('\n')
+}
+
+export function addCardChange(text: string, lane: number, cardText: string, check = false, indent = '    '): KanbanChange | null {
+  const { first, detail } = splitDraft(cardText)
   const l = parseKanban(text)[lane]
-  if (!l || t === '') return null
-  return insertChange(text, l, l.cards, l.cards.length, check ? `- [ ] ${t}` : `- ${t}`)
+  if (!l || first === '') return null
+  return insertChange(text, l, l.cards, l.cards.length, (check ? `- [ ] ${first}` : `- ${first}`) + detailBody(detail, indent))
 }
 
 export function addLaneChange(text: string, title: string): KanbanChange {
@@ -312,12 +329,47 @@ function findCard(text: string, cardFrom: number): KanbanCard | null {
   return null
 }
 
-export function editCardChange(text: string, cardFrom: number, cardText: string): KanbanChange | null {
+// 세부가 바뀌면 하위 줄을 통째로 바꾼다 — 들여쓰기는 지금 하위 줄 것, 없으면 indent
+export function editCardChange(text: string, cardFrom: number, cardText: string, indent = '    '): KanbanChange | null {
   const card = findCard(text, cardFrom)
-  const t = cardText.trim()
-  if (!card || t === '' || t === card.text.trim()) return null
+  const { first, detail } = splitDraft(cardText)
+  if (!card || first === '') return null
+  const sameText = first === card.text.trim()
+  const sameDetail = detail.length === card.detail.length && detail.every((line, i) => line === card.detail[i])
+  if (sameText && sameDetail) return null
   const spaceBefore = card.textFrom === card.textTo && !/[ \t]/.test(text[card.textFrom - 1] ?? '') ? ' ' : ''
-  return { from: card.textFrom, to: card.textTo, insert: spaceBefore + t }
+  if (sameDetail) return { from: card.textFrom, to: card.textTo, insert: spaceBefore + first }
+  const rawDetail = text.slice(card.textTo + 1, card.to).split('\n').filter((line) => line.trim() !== '')
+  const own = rawDetail.length > 0 ? rawDetail.map((line) => /^[ \t]*/.exec(line)![0]).reduce((a, b) => (b.length < a.length ? b : a)) : indent
+  return { from: card.textFrom, to: card.to, insert: spaceBefore + first + detailBody(detail, own) }
+}
+
+export type KanbanDetailLine = { indent: number; kind: 'bullet' | 'check' | 'text'; done: boolean; text: string }
+
+// 보드 표시용 하위 줄 — 목록 줄은 불릿·체크, 펜스 안은 글자 그대로 (small 2026-10-23)
+export function kanbanDetailLines(detail: string[]): KanbanDetailLine[] {
+  let fence: Fence | null = null
+  return detail.map((line) => {
+    const lead = /^[ \t]*/.exec(line)![0]
+    const indent = [...lead].reduce((n, ch) => n + (ch === '\t' ? 4 : 1), 0)
+    const plain: KanbanDetailLine = { indent: 0, kind: 'text', done: false, text: line }
+    if (fence) {
+      if (closesFence(line, fence)) fence = null
+      return plain
+    }
+    const fo = openFence(line)
+    if (fo) {
+      fence = { ...fo, mode: 'detail' }
+      return plain
+    }
+    const rest = line.slice(lead.length)
+    const item = ITEM_RE.exec(rest)
+    if (!item || rest.length === item[0].length) return { ...plain, indent, text: rest }
+    const body = rest.slice(item[0].length)
+    const c = CHECK_RE.exec(body)
+    if (c) return { indent, kind: 'check', done: c[1] !== ' ', text: body.slice(c[0].length) }
+    return { indent, kind: 'bullet', done: false, text: body }
+  })
 }
 
 export function toggleCardChange(text: string, cardFrom: number): KanbanChange | null {
