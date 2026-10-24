@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { APP_GROWTH_FILE, appGrowthAllowance, appGrowthViolation, parseNumstat } from './lib/appGrowth.mjs'
+import { checkFilesTable } from './lib/filesTable.mjs'
 
 function parseArgs(argv) {
   const opts = { feature: null, base: null }
@@ -248,6 +249,13 @@ async function main() {
     const numstat = parseNumstat(git(['diff', '--numstat', opts.base ?? 'HEAD', '--', APP_GROWTH_FILE]))
     const growth = appGrowthViolation(numstat, appGrowthAllowance(readFileSync(`specs/features/${opts.feature}.md`, 'utf-8')))
     if (growth) violations.push({ file: APP_GROWTH_FILE, line: 0, kind: 'App.tsx 증가', text: `순증가 ${growth.net}줄 > 한도 ${growth.limit}줄 — 새 기능은 자기 컴포넌트·훅에` })
+  }
+
+  if (files.some((f) => /^(src|worker|cli|site)\/.*\.tsx?$/.test(f))) {
+    const listed = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'src', 'worker', 'cli', 'site', 'brand.config.ts', 'vite.config.ts'])
+      .split('\0')
+      .filter((f) => /\.tsx?$/.test(f) && existsSync(f))
+    for (const text of checkFilesTable(readFileSync('specs/files.md', 'utf-8'), listed)) violations.push({ file: 'specs/files.md', line: 0, kind: '파일표 어긋남', text })
   }
 
   for (const file of warnings) {
