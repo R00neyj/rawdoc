@@ -43,6 +43,17 @@
   font-size: 24px;
 }
 
+.phone-tabs-close-all {
+  justify-self: end;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+}
+
 
 .phone-tabs-grid {
   flex: 1;

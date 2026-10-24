@@ -85,6 +85,15 @@ export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTa
     else tabs.onClose(key)
   }
 
+  function handleCloseAll() {
+    const key = state.active ?? state.tabs[0]?.key
+    if (key === undefined) return
+    closeThen(() => {
+      tabs.onCloseOthers(key)
+      tabs.onClose(key)
+    })
+  }
+
   return (
     <dialog
       ref={dialogRef}
@@ -137,7 +146,9 @@ export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTa
               ＋
             </button>
             <h2>탭 {state.tabs.length}개</h2>
-            <span />
+            <button type="button" className="phone-tabs-close-all" onClick={handleCloseAll}>
+              전부 닫기
+            </button>
           </div>
         </>
       )}
