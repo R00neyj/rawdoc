@@ -204,7 +204,9 @@ function buildToolbar(view: EditorView, wrap: HTMLElement, alignNow: ImageAlign)
   }
   toolbar.appendChild(el('div', 'md-image-toolbar-divider'))
   toolbar.appendChild(buildDeleteButton(view, wrap))
-  return toolbar
+  const slot = el('div', 'md-image-toolbar-slot')
+  slot.appendChild(toolbar)
+  return slot
 }
 
 function ensureSizeLabel(box: HTMLElement): HTMLElement {

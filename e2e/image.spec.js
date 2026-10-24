@@ -209,7 +209,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       expect(lines[0]).toBe('첫째 줄')
       expect(lines[1]).toBe('둘째 줄')
       expect(lines[2]).toBe('')
-      expect(lines[3]).toMatch(/^!\[이미지\|center\|200\]\(attachments\/[0-9a-f]{16}\.png\)$/)
+      expect(lines[3]).toMatch(/^!\[이미지\|200\]\(attachments\/[0-9a-f]{16}\.png\)$/)
       expect(lines[4]).toBe('')
       expect(lines[5]).toBe('셋째 줄')
 
@@ -345,7 +345,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       await pasteFiles(page, { files: [{ bytes: pngBytes(200, 100), name: 'a.png', mime: 'image/png' }] })
       await waitSaved(page)
       const rawSaved = await readSavedContent(page)
-      expect(rawSaved.content).toContain('|center|200](attachments/')
+      expect(rawSaved.content).toContain('![이미지|200](attachments/')
 
       await importMarkdown(page, { content: '본문\n' })
       await setViewMode(page, 'view')
@@ -464,17 +464,18 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await pasteImage(page, { width: 200, height: 100, afterText: '본문' })
 
       const before = (await readSavedContent(page)).content
-      expect(before).toContain('|center|')
+      expect(before).toMatch(/!\[이미지\|\d+\]\(attachments\//) // 붙여넣기 기본은 왼쪽(정렬 조각 없음)
 
       const box = page.locator('.md-image-box')
       await box.hover()
-      const leftBtn = page.getByRole('button', { name: '왼쪽 정렬' })
-      await leftBtn.click()
+      const centerBtn = page.getByRole('button', { name: '가운데 정렬' })
+      await expect(page.getByRole('button', { name: '왼쪽 정렬' })).toHaveAttribute('aria-pressed', 'true')
+      await centerBtn.click()
       await waitSaved(page)
-      const afterLeft = (await readSavedContent(page)).content
-      expect(afterLeft).toBe(before.replace('|center|', '|')) // 정렬 조각만 바뀜
-      await expect(leftBtn).toHaveAttribute('aria-pressed', 'true')
-      await expect(page.getByRole('button', { name: '가운데 정렬' })).toHaveAttribute('aria-pressed', 'false')
+      const afterCenter = (await readSavedContent(page)).content
+      expect(afterCenter).toBe(before.replace('![이미지|', '![이미지|center|')) // 정렬 조각만 바뀜
+      await expect(centerBtn).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.getByRole('button', { name: '왼쪽 정렬' })).toHaveAttribute('aria-pressed', 'false')
       // 정렬별 화면 위치(글자 칸 왼쪽·오른쪽 ±2px)는 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
 
       await box.hover()
@@ -482,13 +483,13 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await rightBtn.click()
       await waitSaved(page)
       const afterRight = (await readSavedContent(page)).content
-      expect(afterRight).toBe(before.replace('|center|', '|right|'))
+      expect(afterRight).toBe(before.replace('![이미지|', '![이미지|right|'))
 
       await page.locator('.cm-content .cm-line', { hasText: '본문' }).click() // 편집기로 포커스 복귀(Ctrl+Z 는 CM6 키맵)
       await page.keyboard.press('Control+z')
       await waitSaved(page)
       const undone = (await readSavedContent(page)).content
-      expect(undone).toBe(afterLeft)
+      expect(undone).toBe(afterCenter)
     })
     await test.step('F-157 A6 키보드 — → 10px, Shift+→ 50px', async () => {
       await resetBrowserState(page)
@@ -568,10 +569,13 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       saved = await readSavedContent(page)
       expect(widthOf(saved.content)).toBe(400)
 
-      // 가운데 정렬(기본) + 모서리 +50px → 500 (±1), 높이 비율 유지
+      // 가운데 정렬 + 모서리 +50px → 500 (±1), 높이 비율 유지
       await importMarkdown(page, { content: '본문\n' })
       await pasteImage(page, { width: 400, height: 200, afterText: '본문' })
       box = page.locator('.md-image-box')
+      await box.hover()
+      await page.getByRole('button', { name: '가운데 정렬' }).click()
+      await waitSaved(page)
       await box.hover()
       await dragHandle(page, page.locator('.md-image-handle-corner'), 50)
       await waitSaved(page)
@@ -646,7 +650,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await page.keyboard.press('ArrowDown')
       await page.keyboard.press('ArrowDown')
       await expect(page.locator('.md-image-box')).toHaveCount(0)
-      await expect(page.locator('.cm-content')).toContainText('![이미지|center|')
+      await expect(page.locator('.cm-content')).toContainText('![이미지|')
 
       await page.keyboard.press('Control+Home')
       await expect(page.locator('.md-image-box')).toHaveCount(1)
@@ -729,9 +733,9 @@ test.describe('F-218 편집 모드 이미지 삭제 버튼', () => {
     await waitSaved(page)
 
     const before = (await readSavedContent(page)).content
-    expect(before).toContain('![이미지|center|')
+    expect(before).toContain('![이미지|')
 
-    const blockStart = before.indexOf('![이미지|center|')
+    const blockStart = before.indexOf('![이미지|')
     const lineEnd = before.indexOf('\n', blockStart)
     const removeEnd = before[lineEnd] === '\n' ? lineEnd + 1 : lineEnd
     const expected = before.slice(0, blockStart) + before.slice(removeEnd)
@@ -958,25 +962,25 @@ test.describe('F-2127 이미지 원문을 표준 마크다운으로', () => {
     await importMarkdown(page, { content: '본문\n' })
     await pasteOne(page, '본문', 200, 100)
     const pasted = (await readSavedContent(page)).content
-    expect(pasted).toMatch(/\n!\[이미지\|center\|200\]\(attachments\/[0-9a-f]{16}\.png\)\n/)
+    expect(pasted).toMatch(/\n!\[이미지\|200\]\(attachments\/[0-9a-f]{16}\.png\)\n/)
 
     await page.locator('.md-image-box').hover()
-    await page.getByRole('button', { name: '왼쪽 정렬' }).click()
+    await page.getByRole('button', { name: '가운데 정렬' }).click()
     await waitSaved(page)
-    const left = (await readSavedContent(page)).content
-    expect(left).toBe(pasted.replace('|center|', '|'))
+    const centered = (await readSavedContent(page)).content
+    expect(centered).toBe(pasted.replace('![이미지|', '![이미지|center|'))
     await expect.poll(async () => page.locator('.md-image-img').evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
 
     await page.locator('.md-image-handle-edge').focus()
     await page.keyboard.press('ArrowRight')
     await waitSaved(page)
     const wider = (await readSavedContent(page)).content
-    expect(wider).toBe(left.replace('|200]', '|210]'))
+    expect(wider).toBe(centered.replace('|200]', '|210]'))
 
     await page.locator('.md-image-box').hover()
     await page.getByRole('button', { name: '이미지 삭제' }).click()
     await waitSaved(page)
-    const start = wider.indexOf('![이미지|210]')
+    const start = wider.indexOf('![이미지|center|210]')
     const lineEnd = wider.indexOf('\n', start)
     expect((await readSavedContent(page)).content).toBe(wider.slice(0, start) + wider.slice(lineEnd + 1))
 

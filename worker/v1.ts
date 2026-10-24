@@ -215,7 +215,6 @@ export async function handleCreateAttachmentV1(request: Request, env: Env, ctx?:
     ext: result.row.ext,
     alt: '이미지',
     width: Math.min(result.row.width, 800),
-    align: 'center',
   })
   return jsonResponse({ ...result.row, markdown }, 201)
 }

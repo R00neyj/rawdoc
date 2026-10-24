@@ -586,7 +586,7 @@ describe('F-223 A2 POST /v1/attachments', () => {
     const body = (await res.json()) as { id: string; ext: string; markdown: string; width: number }
     expect(body.ext).toBe('png')
     expect(body.markdown.split('\n').length).toBe(1)
-    expect(body.markdown.startsWith('![이미지|center|')).toBe(true)
+    expect(body.markdown).toMatch(/^!\[이미지\|\d+\]\(/)
     expect(body.markdown.endsWith(`](attachments/${body.id}.png)`)).toBe(true)
     expect(putCalls.length).toBe(1)
   })

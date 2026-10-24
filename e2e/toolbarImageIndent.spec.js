@@ -31,7 +31,7 @@ test.describe('small 휴대폰 서식 바 (390×844, 터치)', () => {
     for (let i = 1; i <= 2; i++) {
       const [chooser] = await Promise.all([page.waitForEvent('filechooser'), row.getByRole('button', { name: '이미지', exact: true }).tap()])
       await chooser.setFiles(file)
-      await expect.poll(async () => ((await readSavedContent(page)).content.match(/!\[사진\|center\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/g) ?? []).length).toBe(i)
+      await expect.poll(async () => ((await readSavedContent(page)).content.match(/!\[사진\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/g) ?? []).length).toBe(i)
     }
     await waitSaved(page)
     const { content } = await readSavedContent(page)
@@ -55,7 +55,7 @@ test.describe('small 휴대폰 서식 바 (390×844, 터치)', () => {
     await fakeSoftKeyboard(page, false)
     await expect(page.locator('.editor-toolbar')).toHaveCount(0)
     await chooser.setFiles({ name: '사진.png', mimeType: 'image/png', buffer: pngBuffer(40, 20) })
-    await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/^첫째\n+!\[사진\|center\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/)
+    await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/^첫째\n+!\[사진\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/)
   })
 
   test('small 휴대폰 이미지 위치 — 접힌 긴 문단 가운데 커서에서 누르면, 고르는 사이 선택이 옮겨 가도 누른 자리에서 문단을 나눠 들어간다', async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe('small 휴대폰 서식 바 (390×844, 터치)', () => {
     await chooser.setFiles({ name: '사진.png', mimeType: 'image/png', buffer: pngBuffer(40, 20) })
     await expect
       .poll(async () => (await readSavedContent(page)).content)
-      .toMatch(new RegExp(`^첫 문단\\n\\n${head}\\n\\n!\\[사진\\|center\\|\\d+\\]\\(attachments/[0-9a-f]{16}\\.png\\)\\n\\n${tail}\\n\\n끝 문단\\n$`))
+      .toMatch(new RegExp(`^첫 문단\\n\\n${head}\\n\\n!\\[사진\\|\\d+\\]\\(attachments/[0-9a-f]{16}\\.png\\)\\n\\n${tail}\\n\\n끝 문단\\n$`))
   })
 
   test('small 툴바 들여쓰기 — Tab 버튼이 목록 줄을 들여쓴다', async ({ page }) => {

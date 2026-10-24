@@ -171,7 +171,6 @@ async function handleIncomingImages(
       ext: img.ext,
       alt: img.alt,
       width: Math.max(1, Math.min(img.width, contentWidth || img.width)),
-      align: 'center',
     }),
   )
 

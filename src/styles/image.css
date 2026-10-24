@@ -74,10 +74,19 @@
 }
 
 /* 정렬 버튼 묶음 — 이미지 안 오른쪽 위 8px 안쪽, 호버·포커스 때만 보인다 (F-157 2.3) */
-.md-image-toolbar {
+/* 이미지가 묶음보다 좁으면 margin-left:auto 가 0 이 돼 오른쪽으로 넘친다 — 왼쪽 정렬 때 왼쪽이 잘리지 않게 */
+.md-image-toolbar-slot {
   position: absolute;
   top: 8px;
+  left: 8px;
   right: 8px;
+  display: flex;
+  pointer-events: none;
+}
+
+.md-image-toolbar {
+  flex-shrink: 0;
+  margin-left: auto;
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -88,6 +97,15 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--transition-fast);
+}
+
+/* 오른쪽 정렬은 넘칠 때 왼쪽으로 넘쳐야 오른쪽이 잘리지 않는다 */
+.md-image-box[data-align='right'] .md-image-toolbar-slot {
+  justify-content: flex-end;
+}
+
+.md-image-box[data-align='right'] .md-image-toolbar {
+  margin-left: 0;
 }
 
 .md-image-box:hover .md-image-toolbar,
