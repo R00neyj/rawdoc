@@ -251,11 +251,15 @@ async function main() {
     if (growth) violations.push({ file: APP_GROWTH_FILE, line: 0, kind: 'App.tsx 증가', text: `순증가 ${growth.net}줄 > 한도 ${growth.limit}줄 — 새 기능은 자기 컴포넌트·훅에` })
   }
 
+  let tableNotice = null
   if (files.some((f) => /^(src|worker|cli|site)\/.*\.tsx?$/.test(f))) {
     const listed = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'src', 'worker', 'cli', 'site', 'brand.config.ts', 'vite.config.ts'])
       .split('\0')
       .filter((f) => /\.tsx?$/.test(f) && existsSync(f))
-    for (const text of checkFilesTable(readFileSync('specs/files.md', 'utf-8'), listed)) violations.push({ file: 'specs/files.md', line: 0, kind: '파일표 어긋남', text })
+    const problems = checkFilesTable(readFileSync('specs/files.md', 'utf-8'), listed)
+    const missing = problems.filter((p) => p.endsWith('표에 없음')).length
+    const ghost = problems.filter((p) => p.endsWith('파일이 없음')).length
+    if (problems.length) tableNotice = `specs/files.md 갱신 필요 (main) — 누락 ${missing}·유령 ${ghost}·기타 ${problems.length - missing - ghost} (npm run files:check)`
   }
 
   for (const file of warnings) {
@@ -264,7 +268,8 @@ async function main() {
   for (const v of violations) {
     console.log(`${v.file}:${v.line} ${v.kind} ${truncate(v.text)}`)
   }
-  console.log(`위반 ${violations.length} · 경고 ${warnings.length}`)
+  if (tableNotice) console.log(tableNotice)
+  console.log(`위반 ${violations.length} · 경고 ${warnings.length + (tableNotice ? 1 : 0)}`)
 
   process.exitCode = violations.length ? 1 : 0
 }
