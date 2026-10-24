@@ -26,6 +26,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 - **Each criterion is tested in one place.** A criterion a pure function can decide gets a unit test only, never a second e2e. e2e is for what only a browser shows — wiring, focus, IME, sync between contexts — **at most 3 e2e per spec**; more needs a line in the spec saying why. App.tsx split characterization tests (F-2059) are exempt
 - If a test could not come first (unknown external response shape, bug fixes), check whether the test you added **fails against the pre-fix code**, decide whether it works as a regression test, and say so in your report
 - **A feature lives in its own component or hook file; `src/app/App.tsx` only wires it in.** A spec may grow App.tsx by at most 30 lines net; `npm run review` flags more as a violation. A spec that truly needs more writes `App.tsx 증가 허용: N — {reason}` in its body
+- **Put each file in its feature folder.** `src/app/` and `src/lib/` hold one folder per feature (`kanban/`, `share/`, `session/` …); a new file goes into the matching folder, and a new feature gets a new folder. Only the shell (`App`, `AppDialogs`, `AppScreens`, `Dialog`, `icons`, `prefs`, `usePresence`) stays at `src/app/` root. Its test mirrors the path under `tests/`. `specs/files.md` lists every file by folder
 - **Design does not get TDD, and there are no smoke e2e.** Never write an e2e that only checks that a button, menu or dialog appears, opens or closes — a person sees that at once. An e2e must assert what happens after: data changes, a save survives a reload, focus returns by rule, sync across contexts. Never pin visual values (color, spacing, alignment, typeface) in e2e
 - **Build design fast and let the user look.** Implement → `npm run dev` / deploy → user checks → fix. Visual judgment goes to `specs/human-checks.md`, not to an agent
 
@@ -53,7 +54,7 @@ Overrides "match the surrounding code" — older multi-line blocks are not prece
 | `specs/tweaks.md` | One line per tweak: date, what, why (user's words), related spec | By main, in the tweak's commit |
 | `specs/small-changes.md` | One line per small change: date, what, why (user's words), related spec | By main, in the change's commit |
 | `specs/map.md` | Mermaid map of every page, screen, dialog and feature group, plus the mobile review checklist. Derived from `ia.md` and the code, not a source of truth | By main, when a screen, layer or entry route is added or removed |
-| `specs/files.md` | One plain-Korean line per `.ts`/`.tsx` source file (tests excluded), readable by non-developers. Derived from the code, not a source of truth | By main, when a source file is added, removed or changes role |
+| `specs/files.md` | One plain-Korean line per `.ts`/`.tsx` source file (tests excluded), grouped by feature folder. An agent greps it to find a file from a Korean word. Derived from the code, not a source of truth | By main, when a source file is added, moved, removed or changes role. `npm run files:check` finds missing, ghost and misplaced rows |
 | `specs/notes.md` | Discussion notes before anything becomes a spec. Move into `product.md` or an `F-xxx.md` once settled, and delete here | Freely |
 | `specs/wireframes/` | Grayscale HTML wireframes and UX flow pages (`*-flow.html`, Direction 4) shown to the user before building a screen, plus their image assets. Not a source of truth; assets move to `public/` when implemented | Freely |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
@@ -105,7 +106,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Auth | `better-auth` 1.7.10 (Google·GitHub OAuth, D1 sessions) + `@better-auth/oauth-provider` 1.7.10 (MCP connector authorization server, F-4009) + `worker/apiTokens.ts` for CLI | F-2033 (replaces Access, F-205). Not deployed yet — deploy steps in `specs/features/F-2033.md` ch. 11 |
 | MCP transport | `@modelcontextprotocol/server` 2.3.1 + `zod` 4.5.4 (direct dependency), only in `worker/mcp*.ts` | In use (F-3030) |
 | CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) + `y-protocols` (awareness, F-307) | In use (F-302) |
-| Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Deployed 2026-09-24 (F-305~F-308). Edit locks removed (F-309); fallback sessions save by PUT and split on `baseVersion` 409 copies |
+| Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/session/useLiveDoc.ts`). Deployed 2026-09-24 (F-305~F-308). Edit locks removed (F-309); fallback sessions save by PUT and split on `baseVersion` 409 copies |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | In use (F-150) |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | In use (F-292 revision). Only F-2001 and F-2002 install them; no other spec may add a 3D dependency. Never use `3d-force-graph` |
 | Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | In use (F-2049). Only `src/welcome/` may import it; the app, `worker/`, `site/`, `cli/` never do (`tests/src/welcome/gsapBoundary.test.ts`). Standard "No Charge" license, not open source |
@@ -138,6 +139,7 @@ npm run e2e:before -- "F-246 A6" --ref 2f4099a --repeat 3   # run the same test 
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
 npm run measure -- --touch --size 390x844 --select ".topbar-pill" --style width,height   # phone measurement; --touch is required for (pointer: coarse) values
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
+npm run files:check   # specs/files.md rows match the real source files (missing, ghost, wrong section, count, order)
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
 node --test "tests/scripts/lib/*.test.mjs"   # admin script tests (F-2029)
