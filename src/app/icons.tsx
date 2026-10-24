@@ -108,6 +108,9 @@ import favoriteSvg from '@material-symbols/svg-400/outlined/favorite.svg?raw'
 // 상단바 `보드` 보기 (F-2140 4장)
 import viewKanbanSvg from '@material-symbols/svg-400/outlined/view_kanban.svg?raw'
 import removeDoneSvg from '@material-symbols/svg-400/outlined/remove_done.svg?raw'
+// 설정 왼쪽 목록 항목 앞 아이콘 (small 2026-10-25)
+import desktopWindowsSvg from '@material-symbols/svg-400/outlined/desktop_windows.svg?raw'
+import swapVertSvg from '@material-symbols/svg-400/outlined/swap_vert.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -265,6 +268,8 @@ export const IconKanban = makeIcon(viewKanbanSvg)
 // 칸반 메뉴 `칸 추가`·`체크 칸 떼기` (tweak 2026-10-15)
 export const IconAdd = makeIcon(addSvg)
 export const IconRemoveCheck = makeIcon(removeDoneSvg)
+export const IconScreen = makeIcon(desktopWindowsSvg)
+export const IconSwap = makeIcon(swapVertSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

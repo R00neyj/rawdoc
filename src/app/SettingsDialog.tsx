@@ -14,7 +14,7 @@ import type { GithubStatus } from '../lib/githubContract'
 import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, groupSettingsTabs, settingsTabGroupLabel, type SettingsTabId } from './settingsTabs'
 import SettingsCard from './SettingsCard'
-import { IconClose } from './icons'
+import { IconAccount, IconClose, IconGuide, IconKanban, IconLock, IconNoteAdd, IconRaw, IconRightPanelOpen, IconScreen, IconSwap } from './icons'
 import type { TemplateEntry } from '../lib/templates'
 import TemplateSelectField from './TemplateSelectField'
 import DocPickerDialog from './DocPickerDialog'
@@ -98,6 +98,18 @@ const TAB_LABELS: Record<SettingsTabId, string> = {
   data: '가져오기·내보내기',
   e2ee: '금고',
   account: '계정',
+}
+
+const TAB_ICONS: Record<SettingsTabId, typeof IconScreen> = {
+  screen: IconScreen,
+  css: IconRaw,
+  writing: IconGuide,
+  start: IconNoteAdd,
+  rightPanel: IconRightPanelOpen,
+  kanban: IconKanban,
+  data: IconSwap,
+  e2ee: IconLock,
+  account: IconAccount,
 }
 
 // `계정` 탭 — 로그인(또는 오프라인이고 저장된 계정)일 때만 App 이 준다 (F-2038.md 6.1)
@@ -876,6 +888,7 @@ export default function SettingsDialog({
                   {group.tabs.map((id) => {
                     const i = tabs.indexOf(id)
                     const selected = id === resolvedActiveTab
+                    const TabIcon = TAB_ICONS[id]
                     return (
                       <button
                         key={id}
@@ -891,6 +904,7 @@ export default function SettingsDialog({
                         }}
                         onClick={() => setActiveTab(id)}
                       >
+                        <TabIcon size={16} />
                         {TAB_LABELS[id]}
                       </button>
                     )
