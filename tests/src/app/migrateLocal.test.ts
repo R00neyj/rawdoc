@@ -8,7 +8,7 @@ import {
   type LocalSnapshot,
 } from '../../../src/app/migrateLocal'
 import type { Attachment, Doc, Folder } from '../../../src/types'
-import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from '../../../src/app/guideDoc'
+import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from '../../../src/app/help/guideDoc'
 import type { LocalE2eeKeys } from '../../../src/e2ee/convert'
 import { createDocKey, createKeyBundle, decryptDocField, encryptAttachment, encryptDocField, openDocKey, openWithPassword } from '../../../src/e2ee/crypto'
 

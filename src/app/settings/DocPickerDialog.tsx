@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import Dialog from '../Dialog'
 import { IconSearch } from '../icons'
 import { filterPickerDocs, type PickerDoc } from './docPicker'
-import { nextResultIndex } from '../searchResults'
+import { nextResultIndex } from '../search/searchResults'
 
 const UNTITLED = '제목 없는 문서'
 

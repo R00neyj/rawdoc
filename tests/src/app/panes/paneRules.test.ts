@@ -11,7 +11,7 @@ import {
 } from '../../../../src/app/panes/paneRules'
 import { closePane, setPaneTabs, splitPane, type PaneTabs, type SplitLayout, type SplitState } from '../../../../src/app/panes/splitLayout'
 import { MAX_TABS, type DocTab } from '../../../../src/app/panes/docTabs'
-import type { DocMeta } from '../../../../src/app/docMeta'
+import type { DocMeta } from '../../../../src/app/sidebar/docMeta'
 
 const tab = (key: string, pinned = true): DocTab => ({ key, pinned, title: key.toUpperCase() })
 const pane = (keys: string[], active: string | null = keys[keys.length - 1] ?? null, preview: string[] = []): PaneTabs => ({

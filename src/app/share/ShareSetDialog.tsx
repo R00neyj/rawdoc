@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Dialog from '../Dialog'
 import { fetchShareSet, type ShareSetNode } from './shareSetApi'
 import { getShareLink, createShareLink } from './linkApi'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 const INDENT_PX = 16
 

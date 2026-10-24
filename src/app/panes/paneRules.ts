@@ -2,7 +2,7 @@
 import { MAX_TABS, openTabCapped, type DocTab, type OpenMode } from './docTabs'
 import { MAX_PANES, cycleSplit, paneTabLimit, setPaneTabs, splitPane, totalTabs, type SplitDir, type SplitState } from './splitLayout'
 import { MAX_DOC_UNITS, docUnitIds, type PaneDoc } from '../session/docUnit'
-import type { DocMeta } from '../docMeta'
+import type { DocMeta } from '../sidebar/docMeta'
 
 export const TABS_FULL = `탭은 ${MAX_TABS}개까지 열 수 있습니다. 안 쓰는 탭을 닫아 주세요.`
 export const PANES_FULL = `화면은 ${MAX_PANES}칸까지 나눌 수 있습니다.`

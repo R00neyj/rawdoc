@@ -1,5 +1,5 @@
 import type { AttachmentExt, Doc } from '../../types'
-import { isSharedDoc } from '../docMeta'
+import { isSharedDoc } from '../sidebar/docMeta'
 
 // 공유받은 문서는 캐시에 없어 저장소가 첨부 확장자를 못 찾는다 — 열린 본문에서 찾아 그 문서 권한으로 받게 한다 (F-212 2.2)
 export function sharedAttachmentHint(

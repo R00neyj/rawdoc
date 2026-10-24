@@ -95,7 +95,7 @@ export function buildSite(input: SiteInput): Record<string, string> {
 
   const fileEntries = Object.entries(input.content).filter(([relPath]) => relPath.endsWith('.md'))
   if (fileEntries.some(([relPath]) => relPath === HELP_CONTENT_PATH)) {
-    throw new Error(`content/${HELP_CONTENT_PATH}: 도움말은 src/app/helpDoc.ts 가 원본입니다 — content/ 에 두지 않습니다`)
+    throw new Error(`content/${HELP_CONTENT_PATH}: 도움말은 src/app/help/helpDoc.ts 가 원본입니다 — content/ 에 두지 않습니다`)
   }
   if (fileEntries.some(([relPath]) => relPath === GUIDES_INDEX_PATH)) {
     throw new Error(`content/${GUIDES_INDEX_PATH}: 사용법 목록은 빌드가 만듭니다 — 글은 content/guides/{slug}.md 로 두세요`)

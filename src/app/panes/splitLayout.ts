@@ -1,6 +1,6 @@
 // 화면 분할 배치 상태 기계·저장 — 순수 함수 (F-2162, F-2159 3·5장)
 import { EMPTY_TABS, MAX_TABS, parseStoredTabs, parseTabsEntry, readMap, type DocTab, type DocTabsState } from './docTabs'
-import type { ViewMode } from '../ViewModeMenu'
+import type { ViewMode } from '../topbar/ViewModeMenu'
 
 export type SplitLayout = 'single' | 'cols' | 'rows' | 'grid' | 'three-left' | 'three-right' | 'three-top' | 'three-bottom'
 export type PaneTabs = DocTabsState & { viewMode: ViewMode }

@@ -28,7 +28,7 @@ import {
   stripControlChars,
   type CliErrorCode,
 } from '../../../cli/src/output'
-import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash/trash'
 
 const CLI = 'rawdoc'
 const CLI_ENV = 'RAWDOC'

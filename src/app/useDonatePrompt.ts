@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { getPref, setPref } from './prefs'
 import { openDonateDialog } from './donateStore'
 import { IconFavorite } from './icons'
-import type { NoticeWithAction } from './NoticeBar'
+import type { NoticeWithAction } from './notices/NoticeBar'
 import { afterDismiss, decideDonatePrompt } from '../lib/donatePrompt'
 
 const BOOT_DELAY_MS = 3_000

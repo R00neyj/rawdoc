@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { LocalGraph, LocalGraphNode } from '../../lib/map/localGraph'
 import { hasWebGL2 } from './webgl2'
 import PanelGraphSvg from './PanelGraphSvg'
-import type { DocGraphView } from '../usePanelDocs'
+import type { DocGraphView } from '../rightPanel/usePanelDocs'
 
 // three·지도 설정은 그래프가 실제로 보일 때만 받는다 — MapScene 조각은 지도 화면(AppScreens)과 나눠 쓴다
 const PanelGraphScene = lazy(() => import('./PanelGraphScene'))

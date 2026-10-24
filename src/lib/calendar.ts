@@ -1,6 +1,6 @@
 // 오른쪽 패널 달력 — 월 격자·날짜 문서 제목·찾기, 순수 함수 (small 2026-10-10)
-import { formatTemplateDate } from './templates'
-import { normalizeForSearch } from './docSearch'
+import { formatTemplateDate } from './templates/templates'
+import { normalizeForSearch } from './search/docSearch'
 import type { FolderLike } from './folderTree'
 
 export const CALENDAR_DEFAULT_FORMAT = 'YYYY-MM-DD'

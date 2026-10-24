@@ -1,8 +1,8 @@
 // 실시간 알림 띠 판정 — 내 서버 문서인가·끊김 문구·멈춤 알림 갈래, DOM 없는 순수 함수 (F-2070, F-305 11.2, F-506 5.2)
 import type { Store } from '../../types'
-import { isSharedDoc, type DocMeta } from '../docMeta'
+import { isSharedDoc, type DocMeta } from '../sidebar/docMeta'
 import type { StopReason } from './liveDoc'
-import { LIVE_NOTICE, READ_ONLY_LIVE_NOTICE } from '../appNotices'
+import { LIVE_NOTICE, READ_ONLY_LIVE_NOTICE } from '../notices/appNotices'
 
 export type LiveStopNoticeBranch = 'read-only-revoked' | 'read-only-signed-out' | 'revoked' | 'gone' | 'signed-out'
 

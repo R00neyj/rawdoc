@@ -7,8 +7,8 @@ import { postDocGithubBlob, postDocGithubPlan, postDocGithubPush, type GithubRes
 import { mergedTooLarge } from './githubPull'
 import { pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, PUSH_OFFLINE_MESSAGE, readConflict, runGithubPush, type PushOutcome, type PushStep } from './githubPush'
 import { GITHUB_TOO_LARGE_MESSAGE } from './githubUi'
-import type { NoticeWithAction } from '../NoticeBar'
-import type { LiveStatus } from '../StatusBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
+import type { LiveStatus } from '../topbar/StatusBar'
 
 export type GithubPushView = {
   docId: string

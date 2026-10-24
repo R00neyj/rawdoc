@@ -4,7 +4,7 @@ import { loginUrl, type AccountState } from '../account/account'
 import { approveAccessRequest, listShares, rejectAccessRequest, type AccessRequestDecision, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
 import { revokeShareLink, revokeFolderShareLink } from './linkApi'
 import { deleteGrant } from '../../storage/docsApi'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 import type { AccessRequestRow } from '../../lib/share/accessRequest'
 
 export type UseSharesPageOptions = {

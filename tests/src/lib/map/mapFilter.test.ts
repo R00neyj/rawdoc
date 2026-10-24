@@ -1,6 +1,6 @@
 // specs/features/F-2007.md 16.1 U1~U11 (F-292 B7)
 import { describe, it, expect } from 'vitest'
-import { parseSearchQuery } from '../../../../src/lib/docSearch'
+import { parseSearchQuery } from '../../../../src/lib/search/docSearch'
 import {
   MAP_FILTER_DEFAULT,
   MAP_FILTER_ROOT,

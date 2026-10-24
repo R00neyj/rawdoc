@@ -5,14 +5,14 @@ import type { EditorHandle } from '../../editor/Editor'
 import type { Folder, Store, SyncState } from '../../types'
 import type { ResolveAttachment } from '../../viewer/fillMarkdownAssets'
 import { renderMarkdown } from '../../viewer/renderMarkdown'
-import type { DocMeta, OpenDoc } from '../docMeta'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { DocMeta, OpenDoc } from '../sidebar/docMeta'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
 import { vaultNoticeOn } from '../vault/vaultVisibility'
 import { printDoc } from './printDoc'
-import { appliedUserCss } from '../userCssApply'
+import { appliedUserCss } from '../userCss/userCssApply'
 
 export type ExportActionsDeps = {
   store: Store

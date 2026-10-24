@@ -1,8 +1,8 @@
 // 금고 폴더 드롭 — 평문 문서는 금고 문서로 바꾼 뒤 옮긴다(F-407 실행기 재사용). 순수 판단만
 import { planE2eeConvert, type E2eeConvertPlan } from '../../e2ee/convert'
 import type { Doc, Folder } from '../../types'
-import { isSharedDoc } from '../docMeta'
-import type { SelectionItem } from '../sidebarSelection'
+import { isSharedDoc } from '../sidebar/docMeta'
+import type { SelectionItem } from '../sidebar/sidebarSelection'
 
 export type VaultDropSplit = { convert: string[]; move: SelectionItem[]; reject: SelectionItem[] }
 

@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import type { InboxNotificationItem } from '../../lib/comments/docComments'
 import { nextShareSeen } from './shareNotifications'
-import type { NotificationsState } from '../useNotifications'
+import type { NotificationsState } from '../notifications/useNotifications'
 
 export type UseShareResyncInput = {
   status: NotificationsState['status']

@@ -1,7 +1,7 @@
 // 문서마다 묶음 순수 함수 (specs/features/F-2160.md 6장 U1~U5)
 import { describe, expect, it } from 'vitest'
 import { assignDocSlots, docUnitIds, openLoadOf, saverBlocked, unitLocked } from '../../../../src/app/session/docUnit'
-import type { DocMeta } from '../../../../src/app/docMeta'
+import type { DocMeta } from '../../../../src/app/sidebar/docMeta'
 
 const meta = (id: string, e2ee?: 'locked' | 'open'): DocMeta =>
   ({ id, title: id, createdAt: 0, updatedAt: 0, folderId: null, pinnedAt: null, ...(e2ee ? { e2ee } : {}) }) as DocMeta

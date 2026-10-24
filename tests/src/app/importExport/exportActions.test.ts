@@ -5,12 +5,12 @@ import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from '
 import { downloadWorkspaceExport } from '../../../../src/app/importExport/exportWorkspace'
 import { downloadVaultExport } from '../../../../src/app/importExport/exportVault'
 import { printDoc } from '../../../../src/app/importExport/printDoc'
-import { appliedUserCss } from '../../../../src/app/userCssApply'
+import { appliedUserCss } from '../../../../src/app/userCss/userCssApply'
 import { renderMarkdown } from '../../../../src/viewer/renderMarkdown'
 import type { EditorHandle } from '../../../../src/editor/Editor'
 import type { E2eeStatus } from '../../../../src/e2ee/keyring'
 import type { Store } from '../../../../src/types'
-import type { DocMeta } from '../../../../src/app/docMeta'
+import type { DocMeta } from '../../../../src/app/sidebar/docMeta'
 
 vi.mock('../../../../src/app/importExport/exportDoc', () => ({
   exportDoc: vi.fn(async () => {}),
@@ -21,7 +21,7 @@ vi.mock('../../../../src/app/importExport/exportDoc', () => ({
 vi.mock('../../../../src/app/importExport/exportWorkspace', () => ({ downloadWorkspaceExport: vi.fn(async () => {}) }))
 vi.mock('../../../../src/app/importExport/exportVault', () => ({ downloadVaultExport: vi.fn(async () => {}) }))
 vi.mock('../../../../src/app/importExport/printDoc', () => ({ printDoc: vi.fn(async () => {}) }))
-vi.mock('../../../../src/app/userCssApply', () => ({ appliedUserCss: vi.fn(() => []) }))
+vi.mock('../../../../src/app/userCss/userCssApply', () => ({ appliedUserCss: vi.fn(() => []) }))
 vi.mock('../../../../src/viewer/renderMarkdown', () => ({ renderMarkdown: vi.fn(() => '<p>렌더</p>') }))
 
 type AnyFn = (...args: never[]) => unknown

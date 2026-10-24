@@ -1,7 +1,7 @@
 // MCP 지우기 도구 둘 — 문서·폴더를 휴지통으로 보낸다 (F-3032)
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { TRASH_RETENTION_DAYS, trashActorForMcp } from '../src/lib/trash'
+import { TRASH_RETENTION_DAYS, trashActorForMcp } from '../src/lib/trash/trash'
 import { VAULT_DOC_MESSAGE, safeTool, titled, toolError, toolResult, type McpCall } from './mcpCall'
 import { gateMcpWrite } from './mcpWriteGate'
 import { trashDoc, trashFolder } from './trash'

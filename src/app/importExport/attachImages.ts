@@ -4,7 +4,7 @@ import { shrinkImage } from '../../lib/shrinkImage'
 import type { ImageExt } from '../../lib/imageBlock'
 import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../../lib/vault/e2eeLimits'
 import { isE2eeStoreError } from '../../e2ee/e2eeStore'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 export const MAX_INPUT_BYTES = 20 * 1024 * 1024
 export const MAX_RESULT_BYTES = 5 * 1024 * 1024

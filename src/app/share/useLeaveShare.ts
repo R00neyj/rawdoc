@@ -4,7 +4,7 @@ import { leaveShare } from '../../storage/docsApi'
 import type { ServerStore } from '../../storage/serverStore'
 import type { YjsStore } from '../../storage/yjsStore'
 import type { Store } from '../../types'
-import { displayDocTitle, type DocMeta } from '../docMeta'
+import { displayDocTitle, type DocMeta } from '../sidebar/docMeta'
 import {
   LEAVE_SHARE_OFFLINE,
   LEAVE_SHARE_OTHER_TAB,
@@ -12,8 +12,8 @@ import {
   runLeaveShare,
   type LeaveShareTarget,
 } from './leaveShare'
-import type { Notice } from '../notice'
-import type { SharedLeaveMenu } from '../Sidebar'
+import type { Notice } from '../notices/notice'
+import type { SharedLeaveMenu } from '../sidebar/Sidebar'
 
 type Options = {
   store: Store

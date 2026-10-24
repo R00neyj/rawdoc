@@ -5,7 +5,7 @@ import { encodeMarkdown } from '../../lib/encodeMarkdown'
 import { downloadBlob } from '../importExport/exportDoc'
 import { decideExternalChange, LOCAL_CONFLICT_TEXT, readDiskStamp } from './localFileConflict'
 import { localNotUtf8Message, localOpenFailedMessage } from './localFileState'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { LocalFileSession, UseLocalFileResult } from './useLocalFile'
 
 export type LocalBanner = 'conflict' | 'missing' | null

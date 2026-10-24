@@ -5,7 +5,7 @@ import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
 import { selectionLines, computePlacement, buildInsert } from './insertCommands'
-import { planTemplateInsert } from '../lib/templates'
+import { planTemplateInsert } from '../lib/templates/templates'
 
 // F-169 2장과 같은 목록 — 기준 줄이 이 안이면 그 블록의 마지막 줄로 옮긴다(F-169 는 여기서 그냥 포기하지만, 템플릿은 뒤에 넣는다) (5.3)
 const OPAQUE_BLOCK = new Set(['FencedCode', 'Frontmatter', 'Table'])

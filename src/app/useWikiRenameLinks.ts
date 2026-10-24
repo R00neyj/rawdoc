@@ -13,9 +13,9 @@ import {
   type RenameContext,
   type RenameSource,
 } from '../lib/wikiRename'
-import { displayDocTitle, type DocMeta } from './docMeta'
+import { displayDocTitle, type DocMeta } from './sidebar/docMeta'
 import type { EditorHandle } from '../editor/Editor'
-import type { NoticeWithAction } from './NoticeBar'
+import type { NoticeWithAction } from './notices/NoticeBar'
 import type { PaneHost } from './panes/usePaneHost'
 import type { WikiRenameDialogData } from './WikiRenameDialog'
 import type { Folder, Store } from '../types'

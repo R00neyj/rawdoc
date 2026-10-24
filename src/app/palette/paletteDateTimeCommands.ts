@@ -1,5 +1,5 @@
 // 팔레트 날짜·시각 넣기 명령 — 순수, DOM·React 없음 (specs/features/F-2088.md 3.3)
-import { formatTemplateDate, TEMPLATE_DATE_FORMAT, TEMPLATE_TIME_FORMAT } from '../../lib/templates'
+import { formatTemplateDate, TEMPLATE_DATE_FORMAT, TEMPLATE_TIME_FORMAT } from '../../lib/templates/templates'
 import type { PaletteActionCommand } from './paletteContract'
 
 export type DateTimeKind = 'date' | 'time'

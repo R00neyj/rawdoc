@@ -6,8 +6,8 @@ import { useCodeHighlight } from '../../viewer/useCodeHighlight'
 import { IconDownload, IconClose } from '../icons'
 import { stripComments } from '../../lib/comments'
 import type { ShareDoc } from '../../lib/share/shareCodec'
-import Outline from '../Outline'
-import { makeViewOutlineHandle } from '../viewOutlineHandle'
+import Outline from '../rightPanel/Outline'
+import { makeViewOutlineHandle } from '../rightPanel/viewOutlineHandle'
 
 type SharedViewProps = {
   sharedDoc: ShareDoc // decodeShare 결과

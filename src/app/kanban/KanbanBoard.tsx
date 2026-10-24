@@ -21,7 +21,7 @@ import {
   KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
 } from './kanbanDrag'
 import KanbanMenu, { type KanbanMenuActions, type KanbanMenuState, type KanbanMenuTarget } from './KanbanMenu'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import BoardInput from './BoardInput'
 import KanbanCardImages from './KanbanCardImages'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'

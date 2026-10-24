@@ -3,7 +3,7 @@ import { encodeShare, type ShareDoc } from '../../lib/share/shareCodec'
 import { extractAttachmentRefs } from '../../lib/imageBlock'
 import { stripComments } from '../../lib/comments'
 import { formatShareHash } from '../hashRoute'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 export const MAX_LINK_LENGTH = 2_000_000 // Chromium url::kMaxURLChars 기준 (F-130.md 3.2)
 export const WARN_LINK_LENGTH = 8_000 // 보수적으로 잡은 경고 기준 (F-130.md 3.2)

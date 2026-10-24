@@ -7,7 +7,7 @@ import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './contentWidth'
 import { resolveTheme } from './theme'
 import { resolveDefaultView, type DefaultView } from './defaultView'
 import { defaultStartDocId, type PickerDoc } from '../settings/docPicker'
-import { NEW_DOC_TEMPLATE_NONE } from '../../lib/templates'
+import { NEW_DOC_TEMPLATE_NONE } from '../../lib/templates/templates'
 import { parseCssColor } from '../../lib/map/cssColor'
 
 // theme-color 는 color-mix 를 못 받을 수 있어 계산된 색을 #rrggbb 로 바꿔 넣는다

@@ -17,7 +17,7 @@
     "../src/lib/account/cliSeal.ts",
     "../src/lib/decodeMarkdown.ts",
     "../src/lib/imageFile.ts",
-    "../src/lib/trash.ts",
+    "../src/lib/trash/trash.ts",
     "../src/lib/lineEnding.ts",
     "../src/lib/siteMeta.ts",
     "../src/lib/folderTree.ts",

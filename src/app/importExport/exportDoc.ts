@@ -17,7 +17,7 @@ import {
   type ExportResources,
 } from '../../viewer/toHtmlDoc'
 import type { LineEnding } from '../../types'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 type AttachmentRecord = { id: string; ext: string; blob: { arrayBuffer(): Promise<ArrayBuffer> } }
 type ExportStore = { getAttachment?(id: string): Promise<AttachmentRecord | null> }

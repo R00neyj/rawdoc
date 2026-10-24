@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import brand from '../../../brand.config'
 import { fenceSource, SYNTAX_GROUPS } from '../../../src/lib/markdownSyntax'
-import { HELP_DOC_CONTENT } from '../../../src/app/helpDoc'
+import { HELP_DOC_CONTENT } from '../../../src/app/help/helpDoc'
 import { KIND_ALIASES, parseCalloutHeader } from '../../../src/lib/callout'
 import { HIGHLIGHT_LANG_LABELS, isMermaidInfo } from '../../../src/lib/codeLang'
 

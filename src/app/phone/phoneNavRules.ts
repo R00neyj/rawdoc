@@ -1,6 +1,6 @@
 // 휴대폰 폭 하단 알약의 순수 판정 — 찾기 흐림·포커스 숨김·방문 기록 위치 (F-2086 3.1)
-import type { TopBarScreen } from '../topBarMore'
-import type { ViewMode } from '../ViewModeMenu'
+import type { TopBarScreen } from '../topbar/topBarMore'
+import type { ViewMode } from '../topbar/ViewModeMenu'
 
 export function phoneNavFindDisabled(input: { screen: TopBarScreen; viewMode: ViewMode; vaultLocked: boolean }): boolean {
   if (input.screen !== 'doc') return true

@@ -1,6 +1,6 @@
 // 공유 폴더 안에 편집 초대자가 새 문서 만들기 — 순수 판정·문구 (F-2166 3.1·3.4)
 import { ApiError, type SharedFolderItem } from '../../storage/docsApi'
-import type { DocMeta } from '../docMeta'
+import type { DocMeta } from '../sidebar/docMeta'
 
 export type WikiCreatePlan = { kind: 'own' } | { kind: 'shared'; folderId: string } | { kind: 'fallback' }
 

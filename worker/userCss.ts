@@ -4,8 +4,8 @@ import { requireUser } from './auth'
 import { readJsonLimited } from './docs'
 import { ifNoneMatchHits } from './notifications'
 import { dayUsageStatement } from './usage'
-import { USER_CSS_MAX_BODY_BYTES, USER_CSS_MAX_TOTAL_BYTES, validateUserCssSnippets } from '../src/lib/userCssPolicy'
-import type { UserCssSnippet } from '../src/lib/userCssPolicy'
+import { USER_CSS_MAX_BODY_BYTES, USER_CSS_MAX_TOTAL_BYTES, validateUserCssSnippets } from '../src/lib/userCss/userCssPolicy'
+import type { UserCssSnippet } from '../src/lib/userCss/userCssPolicy'
 
 const INSERT_SQL =
   'INSERT INTO user_css (user_id, snippets, rev, created_at, updated_at) VALUES (?, ?, 1, ?, ?) ON CONFLICT(user_id) DO NOTHING'

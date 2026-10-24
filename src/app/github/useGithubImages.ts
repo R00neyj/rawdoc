@@ -7,7 +7,7 @@ import type { Store } from '../../types'
 import { getDocGithubImages } from './githubApi'
 import { githubAttachmentOf, githubImageResolver } from './githubImages'
 import { GITHUB_LINK_FRESH_MS } from './githubUi'
-import { isSharedDoc, type DocMeta } from '../docMeta'
+import { isSharedDoc, type DocMeta } from '../sidebar/docMeta'
 
 export type GithubImagesHandle = {
   resolveImagePath: ResolveImagePath | null

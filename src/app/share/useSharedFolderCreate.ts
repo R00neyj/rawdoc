@@ -4,7 +4,7 @@ import { ApiError, type SharedFolderItem } from '../../storage/docsApi'
 import type { ServerStore } from '../../storage/serverStore'
 import { ACCOUNT_BLOCKED_MESSAGE } from '../../lib/account/usageLimits'
 import { SHARED_CREATE_FALLBACK_NOTICE, SHARED_CREATE_OFFLINE_MESSAGE, sharedCreateErrorMessage } from './sharedFolderCreate'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { Store } from '../../types'
 
 export type SharedNewDocMenu = { online: boolean; onCreate(folderId: string): void; onUnavailable(): void }

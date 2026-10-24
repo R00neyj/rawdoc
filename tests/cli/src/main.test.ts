@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { isEntryScript, main, type MainDeps } from '../../../cli/src/main'
 import { syntaxJson } from '../../../cli/src/syntax'
 import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/account/cliLoginUrl'
-import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash/trash'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })

@@ -1,6 +1,6 @@
 // 빈 상태 S-2 (specs/ia.md 4.3, specs/features/F-111.md 3.6, F-114.md 2.3)
 import { IconClose, IconFileOpen, IconNoteAdd, IconUpload } from './icons'
-import { displayDocTitle } from './docMeta'
+import { displayDocTitle } from './sidebar/docMeta'
 import { formatHash } from './hashRoute'
 import type { RecentFileItem } from '../lib/recentFiles'
 

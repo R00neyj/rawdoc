@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
-import { contrastRatio } from '../../../src/lib/contrast'
+import { contrastRatio } from '../../../src/lib/userCss/contrast'
 import brand from '../../../brand.config'
 
 type Tokens = Record<string, string>

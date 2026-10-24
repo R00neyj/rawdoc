@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openedSession, restartedSession, type DocSession } from '../../../../src/app/session/useDocSession'
-import type { DocMeta } from '../../../../src/app/docMeta'
+import type { DocMeta } from '../../../../src/app/sidebar/docMeta'
 import type { Store } from '../../../../src/types'
 
 describe('restartedSession', () => {

@@ -2,8 +2,8 @@
 import SettingsCard from './SettingsCard'
 import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
 import type { PanelItemId } from '../../lib/panelSlots'
-import type { CommentPanelLayout, RightPanelItemsSettings } from '../useRightPanel'
-import type { TemplateEntry } from '../../lib/templates'
+import type { CommentPanelLayout, RightPanelItemsSettings } from '../rightPanel/useRightPanel'
+import type { TemplateEntry } from '../../lib/templates/templates'
 
 export type RightPanelSettings = RightPanelItemsSettings & { calendar: CalendarSettings }
 

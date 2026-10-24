@@ -1,6 +1,6 @@
 // 공유받은 문서·폴더에서 나가기 — 순수 함수와 나가기 순서 (specs/features/F-2115.md 2.3·2.6)
-import { displayDocTitle, isSharedDoc, type DocMeta } from '../docMeta'
-import type { SharedDocLike } from '../Sidebar'
+import { displayDocTitle, isSharedDoc, type DocMeta } from '../sidebar/docMeta'
+import type { SharedDocLike } from '../sidebar/Sidebar'
 
 export type LeaveShareTarget = { type: 'doc' | 'folder'; id: string; name: string; docCount: number }
 

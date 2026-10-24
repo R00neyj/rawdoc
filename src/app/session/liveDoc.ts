@@ -4,7 +4,7 @@ import type * as Y from 'yjs'
 import { SOCKET_CLOSE, parseDocRoomMessage } from '../../lib/docRoomProtocol'
 import type { LiveSocket, LiveSocketOptions } from '../../storage/liveSocket'
 import type { FallbackReason } from '../docPath'
-import type { LiveStatus } from '../StatusBar'
+import type { LiveStatus } from '../topbar/StatusBar'
 
 export const FIRST_SYNC_TIMEOUT_MS = 10_000
 export const FIRST_SYNC_HARD_TIMEOUT_MS = 30_000

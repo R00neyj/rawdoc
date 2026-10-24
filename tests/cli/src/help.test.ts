@@ -1,7 +1,7 @@
 // F-2132 A9 (help.ts)
 import { describe, expect, it } from 'vitest'
 import { commandHelpText, helpText } from '../../../cli/src/help'
-import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash/trash'
 
 const USAGE: Record<string, string> = {
   login: '사용: rawdoc login [--force] [--with-token] [--no-browser]',

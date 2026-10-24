@@ -3,7 +3,7 @@ import { PALETTE_COMMANDS, recentFileCommands } from '../../../../src/app/palett
 import { EDITOR_COMMANDS } from '../../../../src/app/contextMenuItems'
 import { filterPaletteItems } from '../../../../src/app/palette/paletteContract'
 import type { PaletteContext } from '../../../../src/app/palette/paletteContract'
-import type { TemplateEntry } from '../../../../src/lib/templates'
+import type { TemplateEntry } from '../../../../src/lib/templates/templates'
 
 type ExtraCtx = Pick<PaletteContext, 'nav' | 'docActions' | 'view' | 'output'>
 

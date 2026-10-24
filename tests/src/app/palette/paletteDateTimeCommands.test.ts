@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PALETTE_DATETIME_COMMANDS, dateTimeText } from '../../../../src/app/palette/paletteDateTimeCommands'
 import { PALETTE_COMMANDS } from '../../../../src/app/palette/paletteCommands'
 import { filterPaletteItems, type PaletteContext } from '../../../../src/app/palette/paletteContract'
-import { expandTemplateVariables } from '../../../../src/lib/templates'
+import { expandTemplateVariables } from '../../../../src/lib/templates/templates'
 
 const PALETTE_ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9-]*)+$/
 

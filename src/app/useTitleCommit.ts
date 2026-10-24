@@ -1,10 +1,10 @@
 // 제목 저장·공백 제목 되돌림 — App.tsx 에서 옮김 (F-2079, F-111, F-217)
 import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { isE2eeStoreError } from '../e2ee/e2eeStore'
-import { E2EE_NOTICE } from './appNotices'
-import { sortByUpdatedAtDesc, type DocMeta } from './docMeta'
+import { E2EE_NOTICE } from './notices/appNotices'
+import { sortByUpdatedAtDesc, type DocMeta } from './sidebar/docMeta'
 import type { EditorHandle } from '../editor/Editor'
-import type { NoticeWithAction } from './NoticeBar'
+import type { NoticeWithAction } from './notices/NoticeBar'
 import type { Store } from '../types'
 
 export type UseTitleCommitOptions = {

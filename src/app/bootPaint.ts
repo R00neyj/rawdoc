@@ -4,7 +4,7 @@ import {
   MAX_SIDEBAR_WIDTH_CAP,
   MAX_SIDEBAR_WIDTH_MARGIN,
   DEFAULT_SIDEBAR_WIDTH,
-} from './sidebarWidth'
+} from './sidebar/sidebarWidth'
 import {
   MIN_CONTENT_WIDTH,
   MAX_CONTENT_WIDTH,
@@ -12,12 +12,12 @@ import {
   DEFAULT_CONTENT_WIDTH,
   CONTENT_WIDTH_VAR,
 } from './appearance/contentWidth'
-import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_SNIPPETS } from '../lib/userCssPolicy'
-import { USER_CSS_REV_ATTR } from '../lib/userCssContract'
+import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_SNIPPETS } from '../lib/userCss/userCssPolicy'
+import { USER_CSS_REV_ATTR } from '../lib/userCss/userCssContract'
 
 export const USER_CSS_BOOT_KEY = 'md.userCssBoot'
 export const USER_CSS_ATTR = 'data-user-css'
-export { USER_CSS_REV_ATTR } from '../lib/userCssContract'
+export { USER_CSS_REV_ATTR } from '../lib/userCss/userCssContract'
 // window 속성 — 부팅이 붙인 { sheets, texts } 를 앱이 이어받는다 (F-2095 2장 2)
 export const USER_CSS_HANDOFF = '__userCssBoot'
 

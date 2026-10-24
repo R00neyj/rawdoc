@@ -1,5 +1,5 @@
 // 칸반 보드 우클릭·`⋯` 메뉴 — 카드·칸 머리·빈 자리마다 항목을 고르고 FolderMenu 로 그린다
-import FolderMenu, { type FolderMenuItem } from '../FolderMenu'
+import FolderMenu, { type FolderMenuItem } from '../sidebar/FolderMenu'
 import { IconAdd, IconCheck, IconDelete, IconEdit, IconMove, IconRaw, IconRemoveCheck, IconSettings } from '../icons'
 import type { KanbanLane } from '../../lib/kanban/kanban'
 

@@ -1,7 +1,7 @@
 // 사용자 CSS 적용 신호(rev)가 오를 때마다 편집기 높이를 다시 잰다 (specs/features/F-2098.md 3장)
 import type { Extension } from '@codemirror/state'
 import { ViewPlugin } from '@codemirror/view'
-import { USER_CSS_REV_ATTR } from '../lib/userCssContract'
+import { USER_CSS_REV_ATTR } from '../lib/userCss/userCssContract'
 
 export const userCssRemeasure: Extension = ViewPlugin.define((view) => {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return {}

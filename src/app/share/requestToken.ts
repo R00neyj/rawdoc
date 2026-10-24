@@ -1,6 +1,6 @@
 // 공유 링크 조각에 담을 요청 토큰 — 소유자 서버 문서만 발급받는다 (specs/features/F-2137.md 2장)
-import type { DocMeta } from '../docMeta'
-import { isSharedDoc } from '../docMeta'
+import type { DocMeta } from '../sidebar/docMeta'
+import { isSharedDoc } from '../sidebar/docMeta'
 
 const TIMEOUT_MS = 3000
 const cache = new Map<string, string>()

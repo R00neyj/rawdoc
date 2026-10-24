@@ -7,7 +7,7 @@ export function contentUrl(relPath: string): string | null {
   if (relPath === 'changelog.md') return '/changelog'
   if (relPath === 'legal/privacy.md') return '/privacy'
   if (relPath === 'legal/terms.md') return '/terms'
-  // 도움말만 content/ 에 파일이 없다 — site/build.ts 가 src/app/helpDoc.ts 로 만들어 넣는다 (F-274.md 3장)
+  // 도움말만 content/ 에 파일이 없다 — site/build.ts 가 src/app/help/helpDoc.ts 로 만들어 넣는다 (F-274.md 3장)
   if (relPath === 'help.md') return '/help'
   // 사용법 목록도 content/ 에 파일이 없다 — site/build.ts 가 content/guides/*.md 를 모아 만들어 넣는다 (F-276.md 3장)
   if (relPath === 'guides.md') return '/guides'

@@ -1,0 +1,1366 @@
+// 사이드바 — 폴더 트리·항목 메뉴·끌어놓기 이동·고정됨 묶음 (specs/ia.md 2장 B, F-111·F-114·F-121·F-115·F-126·F-132·F-143.md)
+import { sharedFolderGroups, sharedNewDocAllowed } from '../share/sharedFolderCreate'
+import type { SharedNewDocMenu } from '../share/useSharedFolderCreate'
+import type { SharedFolderItem } from '../../storage/docsApi'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+} from 'react'
+import { buildTree, canMoveFolder, pinnedDocs, type DocLike, type DocNode, type FolderLike, type FolderNode, type TreeNode as TreeNodeType } from '../../lib/folderTree'
+import { displayDocTitle } from './docMeta'
+import { foldersWithUnreadDocs } from './docNotifications'
+import FolderMenu, { type FolderMenuItem } from './FolderMenu'
+import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL, PALETTE_LABEL } from './SidebarHead'
+import { clampSidebarWidth, maxSidebarWidth, MIN_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, ARROW_KEY_STEP } from './sidebarWidth'
+import {
+  EMPTY_SELECTION,
+  toggle as toggleSelection,
+  extend as extendSelection,
+  replace as replaceSelection,
+  prune as pruneSelection,
+  visibleOrder,
+  commonParentId,
+  dedupeDescendants,
+  allAtRoot,
+  rowKey,
+  type Selection,
+  type SelectionItem,
+  type SelectionRow,
+} from './sidebarSelection'
+import { leaveTargetOfDoc, leaveTargetOfFolder, type LeaveShareTarget } from '../share/leaveShare'
+import {
+  IconChevron,
+  IconNoteAdd,
+  IconKanban,
+  IconFolderAdd,
+  IconUpload,
+  IconSearch,
+  IconCommandPalette,
+  IconSettings,
+  IconInstall,
+  IconPin,
+  IconUnpin,
+  IconMove,
+  IconDelete,
+  IconEdit,
+  IconTooltip,
+  IconGroup,
+  IconGroupRemove,
+  IconHelp,
+  IconGuide,
+  IconCollapseAll,
+  IconDownload,
+  IconOpenInNew,
+  IconMap,
+  IconTemplates,
+  IconLock,
+  IconLockOpen,
+  IconCommit,
+} from '../icons'
+import { ImportMenu } from '../github/GithubMenu'
+import SidebarMoreMenu from './SidebarMoreMenu'
+import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../../e2ee/convert'
+import { formatHash } from '../hashRoute'
+import { openDocInNewTab } from '../panes/openInNewTab'
+import { GUIDES_PATH } from '../../lib/siteChrome'
+import AccountMenu, { type AccountMenuProps } from '../account/AccountMenu'
+import SidebarFooter from './SidebarFooter'
+import type { Notice } from '../notices/notice'
+import { visibleOpenFolderIds, type VaultFolderGate } from '../vault/vaultVisibility'
+import { startTabDrag } from '../panes/useTabDrag'
+
+export { SIDEBAR_ID }
+
+type DropTarget = { type: 'folder'; id: string } | { type: 'doc'; id: string } | { type: 'root' }
+// 선택 전체를 끌 때는 항목이 여럿(F-255.md 3.4), 선택 밖 항목은 하나뿐이다
+type Dragged = { items: SelectionItem[] } | null
+// 우클릭·여러 항목 메뉴 버튼이 forcedOpen 으로 여는 행 하나 — 자리는 행 자신의 위치, 좌표는 우클릭일 때만 (F-255.md 3.2)
+type ContextMenuState = { key: string; point: { x: number; y: number } } | null
+// 사이드바 빈 자리 우클릭 메뉴 — 최상위에 새 문서·새 폴더·새 칸반 보드
+const ROOT_MENU_KEY = 'root'
+
+type DeleteDocTarget = { id: string; title: string }
+type DeleteFolderTarget = { id: string; name: string }
+type MoveDocTarget = { id: string; title: string; folderId: string | null }
+
+// 금고 표시 (F-405 6.1) — 트리 노드는 buildTree 가 새로 만들어 e2ee 가 없으므로 id 로 찾는다
+type E2eeDocState = 'locked' | 'open'
+
+// 잠긴 금고 폴더 펼침 문·폴더 메뉴 `금고 잠그기` — 없으면 금고 폴더도 그냥 펼치고 잠그기 항목이 없다 (F-4003 3.1·3.2)
+export type SidebarVault = { gate: VaultFolderGate; onUnlockFolder: (folderId: string) => void; onLock: () => void }
+
+function E2eeIcon() {
+  return (
+    <span className="tree-e2ee-icon" role="img" aria-label="금고">
+      <IconLock size={16} />
+    </span>
+  )
+}
+
+// 공유받은 문서 한 항목 — 끌어 옮기기·⋯ 메뉴 없이 열기만 한다 (specs/features/F-212.md 2.4)
+export type SharedDocLike = {
+  id: string
+  title: string
+  role: 'edit' | 'view'
+  ownerEmail: string
+  viaFolder?: { id: string; name: string } | null
+}
+
+// 공유받음 줄 `공유에서 나가기` 메뉴 — 없으면 메뉴를 그리지 않는다 (F-2115 2.6)
+// GitHub 연결 진입점 — 기능이 켜졌을 때만 App 이 준다 (F-2128 4.6)
+export type SidebarGithub = { onImport: () => void; onNewFile: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
+
+export type { SharedNewDocMenu } from '../share/useSharedFolderCreate'
+
+export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
+
+type SidebarCtx = {
+  sharedLeave?: SharedLeaveMenu
+  sharedNewDoc?: SharedNewDocMenu
+  sharedFolders?: SharedFolderItem[] | null
+  github?: SidebarGithub
+  onSharedContextMenu: (e: ReactMouseEvent<HTMLElement>, key: string) => void
+  currentDocId: string | null
+  openFolderIds: string[]
+  editingId: string | null
+  editingValue: string
+  dropTargetKey: string | null
+  onToggleFolder: (id: string) => void
+  onSelectDoc: (id: string) => void
+  onCreateDoc: (folderId?: string | null) => void
+  onCreateBoard: (folderId: string | null) => void
+  onCreateFolder: (parentId: string | null) => void
+  onStartRename: (id: string, name: string) => void
+  onEditingValueChange: (value: string) => void
+  onRenameKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
+  onCommitRename: () => void
+  onRequestDeleteDoc: (target: DeleteDocTarget) => void
+  onRequestDeleteFolder: (target: DeleteFolderTarget) => void
+  onRequestMoveDoc: (target: MoveDocTarget) => void
+  onTogglePin: (id: string, pinned: boolean) => void
+  onDragStart: (e: DragEvent<HTMLDivElement>, type: 'doc' | 'folder', id: string) => void
+  onDragEnd: () => void
+  onDragOver: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
+  onDrop: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
+  // 여러 항목 선택 — 클릭 뜻(일반/Ctrl/Shift), 우클릭 메뉴, 여러 항목 전용 메뉴 (F-255.md 3.1~3.4)
+  selection: Selection
+  contextMenu: ContextMenuState
+  multiMenuItems: FolderMenuItem[]
+  onItemClick: (e: ReactMouseEvent<HTMLElement>, row: SelectionRow, action: () => void) => void
+  onRowContextMenu: (e: ReactMouseEvent<HTMLDivElement>, row: SelectionRow, isEditingRow: boolean) => void
+  onCloseContextMenu: () => void
+  // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
+  isServerStore: boolean
+  onNotice: (notice: Notice) => void
+  // 폴더 `⋯` 메뉴 `사람 초대…` (F-212.md 2.5)
+  onRequestInviteFolder: (id: string, name: string) => void
+  // 폴더 `⋯` 메뉴 `폴더 내보내기` (F-281.md 3.7)
+  onExportFolder: (id: string) => void
+  // 폴더 `⋯` 메뉴 `옵시디언 볼트로 내보내기` (F-2020.md 6.2)
+  onExportFolderVault: (id: string) => void
+  // 금고 문서 id → 잠김·열림, 금고 폴더 id (F-405 6.1)
+  e2eeDocs: Map<string, E2eeDocState>
+  e2eeFolderIds: Set<string>
+  // 금고로 옮기기·빼기 (F-407 7.1) — 없으면 항목을 만들지 않는다. 판정에 전체 목록이 든다
+  e2eeConvert?: E2eeConvertMenu
+  allDocs: Array<DocLike & { e2ee?: E2eeDocState }>
+  allFolders: Array<FolderLike & { e2ee?: true }>
+  vault?: SidebarVault
+  // 안 읽은 알림이 있는 문서 id·(접혔을 때만 보이는) 그 조상 폴더 id (F-510 3.3)
+  unreadDocIds: ReadonlySet<string>
+  unreadFolderIds: ReadonlySet<string>
+}
+
+// 눈에 보이는 안 읽음 점 — 알림함 안 읽음 점과 같은 값 (F-510 3.3)
+function TreeUnreadDot() {
+  return <span className="tree-unread-dot" aria-hidden="true" />
+}
+
+// 화면엔 안 보이고 스크린리더에만 읽히는 안 읽음 글자 (F-510 3.3)
+function TreeUnreadSr() {
+  return <span className="tree-unread-sr">, 안 읽은 알림</span>
+}
+
+const EMPTY_UNREAD_SET: ReadonlySet<string> = new Set()
+
+export type E2eeConvertMenu = {
+  online: boolean
+  busy: boolean
+  onRequest(direction: E2eeConvertDirection, target: E2eeConvertTarget, name: string): void
+  onUnavailable(reason: 'offline' | 'busy' | 'inside-e2ee-folder'): void
+}
+
+// 금고 항목 — 비활성 판정은 busy → offline → 금고 폴더 안 차례, 눌러도 이유 알림만 (F-407 7.1)
+function e2eeConvertItems(ctx: SidebarCtx, state: E2eeMenuState, target: E2eeConvertTarget, name: string): FolderMenuItem[] {
+  const menu = ctx.e2eeConvert
+  if (!menu) return []
+  const common = menu.busy ? 'busy' : !menu.online ? 'offline' : null
+  const items: FolderMenuItem[] = []
+  const add = (key: string, label: string, icon: FolderMenuItem['icon'], direction: E2eeConvertDirection, inside: boolean) => {
+    const reason = common ?? (inside ? 'inside-e2ee-folder' : null)
+    items.push({
+      key,
+      label,
+      icon,
+      disabled: reason !== null,
+      onSelect: () => (reason ? menu.onUnavailable(reason) : menu.onRequest(direction, target, name)),
+    })
+  }
+  if (state.convert === 'enabled') add('e2ee-convert', '금고로 옮기기…', IconLock, 'to-e2ee', false)
+  if (state.unconvert !== 'hidden') add('e2ee-unconvert', '금고에서 빼기…', IconLockOpen, 'from-e2ee', state.unconvert === 'inside-e2ee-folder')
+  return items
+}
+
+function docE2eeItems(ctx: SidebarCtx, doc: { id: string; folderId: string | null }, title: string): FolderMenuItem[] {
+  if (!ctx.e2eeConvert) return []
+  const state = e2eeMenuForDoc({ folderId: doc.folderId, e2ee: ctx.e2eeDocs.get(doc.id) }, ctx.allFolders)
+  return e2eeConvertItems(ctx, state, { kind: 'doc', id: doc.id }, title || '제목 없음')
+}
+
+function githubDocItems(ctx: SidebarCtx, doc: { id: string }, title: string): FolderMenuItem[] {
+  if (!ctx.github || ctx.e2eeDocs.has(doc.id)) return []
+  const label = ctx.github.linkedDocIds.has(doc.id) ? 'GitHub 연결 정보…' : 'GitHub에 연결…'
+  return [{ key: 'github', label, icon: IconCommit, onSelect: () => ctx.github?.onLinkDoc({ id: doc.id, title }) }]
+}
+
+function dropKeyOf(target: DropTarget): string {
+  return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
+}
+
+// 문서 `⋯` 메뉴 맨 위 `상단 고정`/`고정 해제` 항목 — 트리·묶음 모두 같은 규칙 (F-132.md 4장)
+function pinMenuItem(doc: DocLike, onTogglePin: SidebarCtx['onTogglePin']): FolderMenuItem {
+  const isPinned = doc.pinnedAt != null
+  return {
+    key: 'pin',
+    label: isPinned ? '고정 해제' : '상단 고정',
+    icon: isPinned ? IconUnpin : IconPin,
+    onSelect: () => onTogglePin(doc.id, !isPinned),
+  }
+}
+
+// 트리 한 항목(폴더 또는 문서) — 재귀 렌더링. 콜백은 전부 ctx 를 거쳐 Sidebar 의 함수를 부르고, ref.current 는 직접 읽지 않는다
+function TreeNode({
+  node,
+  depth,
+  ctx,
+  editingInputRef,
+}: {
+  node: TreeNodeType
+  depth: number
+  ctx: SidebarCtx
+  editingInputRef: RefObject<HTMLInputElement | null>
+}) {
+  if (node.type === 'folder') {
+    return <FolderRow node={node} depth={depth} ctx={ctx} editingInputRef={editingInputRef} />
+  }
+  return <DocRow node={node} depth={depth} ctx={ctx} />
+}
+
+// editingInputRef 는 ctx 밖에서 별도 prop 으로 받는다(한 객체에 담으면 정적 분석이 객체 전체를 ref 로 취급해 렌더 중 접근을 막는다)
+function FolderRow({
+  node,
+  depth,
+  ctx,
+  editingInputRef,
+}: {
+  node: FolderNode
+  depth: number
+  ctx: SidebarCtx
+  editingInputRef: RefObject<HTMLInputElement | null>
+}) {
+  const isOpen = ctx.openFolderIds.includes(node.id)
+  const isEditing = ctx.editingId === node.id
+  const target: DropTarget = { type: 'folder', id: node.id }
+  const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
+  const isSelected = ctx.selection.ids.includes(node.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const row: SelectionRow = { kind: 'folder', id: node.id, key: rowKey('tree', node.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
+  const isE2eeFolder = ctx.e2eeFolderIds.has(node.id)
+  // 금고 폴더는 읽기 전용 링크·사람 초대를 보이지 않는다 (F-405 6.1)
+  const canShare = !isMulti && ctx.isServerStore && !isE2eeFolder
+  // 접혀 있을 때만 — 펼치면 그 아래 행으로 점이 옮겨간다 (F-510 3.3)
+  const isUnread = !isOpen && ctx.unreadFolderIds.has(node.id)
+  const vault = ctx.vault
+  // 잠긴 금고 폴더는 펼치는 대신 D-11 을 띄운다 (F-4003 2.4·3.1)
+  const gated = isE2eeFolder && vault?.gate === 'locked'
+  const toggle = () => (gated ? vault.onUnlockFolder(node.id) : ctx.onToggleFolder(node.id))
+
+  // `하위 폴더` 는 모든 폴더에 — 깊이 제한 없음 (F-2017 5.1)
+  const ownItems: FolderMenuItem[] = [
+    { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) },
+    { key: 'new-subfolder', label: '하위 폴더', icon: IconFolderAdd, onSelect: () => ctx.onCreateFolder(node.id) },
+    { key: 'new-board', label: '새 칸반 보드', icon: IconKanban, onSelect: () => ctx.onCreateBoard(node.id) },
+  ]
+  ownItems.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
+  ownItems.push({
+    key: 'export-folder',
+    label: '폴더 내보내기',
+    icon: IconDownload,
+    onSelect: () => ctx.onExportFolder(node.id),
+  })
+  ownItems.push({
+    key: 'export-folder-vault',
+    label: '옵시디언 볼트로 내보내기',
+    icon: IconDownload,
+    onSelect: () => ctx.onExportFolderVault(node.id),
+  })
+  if (ctx.e2eeConvert) {
+    const state = e2eeMenuForFolder(node.id, ctx.allDocs, ctx.allFolders)
+    ownItems.push(...e2eeConvertItems(ctx, state, { kind: 'folder', id: node.id }, node.name))
+  }
+  if (isE2eeFolder && vault?.gate === 'open') {
+    ownItems.push({ key: 'e2ee-lock', label: '금고 잠그기', icon: IconLock, onSelect: vault.onLock })
+  }
+  ownItems.push({
+    key: 'delete',
+    label: '삭제',
+    icon: IconDelete,
+    danger: true,
+    onSelect: () => ctx.onRequestDeleteFolder({ id: node.id, name: node.name }),
+  })
+  const items = isMulti ? ctx.multiMenuItems : ownItems
+
+  return (
+    <li role="treeitem" aria-expanded={isOpen} className="tree-item" data-folder-id={node.id}>
+      <div
+        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
+        style={{ '--depth': depth } as CSSProperties}
+        data-unread={isUnread ? 'true' : undefined}
+        draggable={!isEditing}
+        onDragStart={(e) => ctx.onDragStart(e, 'folder', node.id)}
+        onDragEnd={ctx.onDragEnd}
+        onDragOver={(e) => ctx.onDragOver(e, target)}
+        onDrop={(e) => ctx.onDrop(e, target)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, isEditing)}
+      >
+        <button
+          type="button"
+          className="tree-toggle"
+          aria-label={`${node.name} ${isOpen ? '접기' : '펼치기'}`}
+          aria-haspopup={gated ? 'dialog' : undefined}
+          onClick={toggle}
+        >
+          <IconChevron size={16} className={`tree-toggle-icon${isOpen ? ' tree-toggle-icon--open' : ''}`} />
+        </button>
+        {isEditing ? (
+          <input
+            ref={editingInputRef}
+            className="tree-rename-input"
+            value={ctx.editingValue}
+            onChange={(e) => ctx.onEditingValueChange(e.target.value)}
+            onKeyDown={ctx.onRenameKeyDown}
+            onBlur={ctx.onCommitRename}
+          />
+        ) : (
+          <button
+            type="button"
+            className="tree-label"
+            aria-haspopup={gated ? 'dialog' : undefined}
+            onClick={(e) => ctx.onItemClick(e, row, toggle)}
+          >
+            {node.name}
+            {isUnread && <TreeUnreadSr />}
+          </button>
+        )}
+        {!isEditing && isUnread && <TreeUnreadDot />}
+        {!isEditing && isE2eeFolder && <E2eeIcon />}
+        {!isEditing && (
+          <FolderMenu
+            label={node.name}
+            items={items}
+            shareFolderId={canShare ? node.id : undefined}
+            onNotice={ctx.onNotice}
+            onInvite={canShare ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
+            open={menuOpenHere ? true : undefined}
+            onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+            anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
+          />
+        )}
+      </div>
+      {isOpen && node.children.length > 0 && (
+        <ul role="group" className="tree-group" style={{ '--depth': depth } as CSSProperties}>
+          {node.children.map((child) => (
+            <TreeNode key={child.id} node={child} depth={depth + 1} ctx={ctx} editingInputRef={editingInputRef} />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: SidebarCtx }) {
+  const target: DropTarget = { type: 'doc', id: node.id }
+  const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
+  const isSelected = ctx.selection.ids.includes(node.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const row: SelectionRow = { kind: 'doc', id: node.id, key: rowKey('tree', node.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
+  const e2eeState = ctx.e2eeDocs.get(node.id)
+  const title = displayDocTitle(node.title)
+  const isUnread = ctx.unreadDocIds.has(node.id)
+
+  const ownItems: FolderMenuItem[] = [
+    {
+      key: 'open-new-tab',
+      label: '새 탭에서 열기',
+      icon: IconOpenInNew,
+      onSelect: () => openDocInNewTab(node.id),
+    },
+    pinMenuItem(node, ctx.onTogglePin),
+    {
+      key: 'move',
+      label: '폴더로 이동…',
+      icon: IconMove,
+      onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title, folderId: node.folderId }),
+    },
+    ...docE2eeItems(ctx, node, title),
+    ...githubDocItems(ctx, node, title),
+    {
+      key: 'delete',
+      label: '삭제',
+      icon: IconDelete,
+      danger: true,
+      onSelect: () => ctx.onRequestDeleteDoc({ id: node.id, title }),
+    },
+  ]
+  const items = isMulti ? ctx.multiMenuItems : ownItems
+
+  return (
+    <li role="treeitem" className="tree-item">
+      <div
+        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
+        style={{ '--depth': depth } as CSSProperties}
+        data-unread={isUnread ? 'true' : undefined}
+        draggable
+        onDragStart={(e) => ctx.onDragStart(e, 'doc', node.id)}
+        onDragEnd={ctx.onDragEnd}
+        onDragOver={(e) => ctx.onDragOver(e, target)}
+        onDrop={(e) => ctx.onDrop(e, target)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}
+      >
+        <span className="tree-toggle-spacer" aria-hidden="true" />
+        <a
+          className="tree-label doc-item-btn"
+          href={formatHash(node.id)}
+          draggable={false}
+          aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(node.id)) }}
+        >
+          {title}
+          {isUnread && <TreeUnreadSr />}
+        </a>
+        {isUnread && <TreeUnreadDot />}
+        {e2eeState && <E2eeIcon />}
+        <FolderMenu
+          label={title}
+          items={items}
+          open={menuOpenHere ? true : undefined}
+          onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+          anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
+        />
+      </div>
+    </li>
+  )
+}
+
+// 사이드바 맨 위 `고정됨` 묶음의 항목 — 트리와 별도로 role="list"/listitem, 들여쓰기 없음, 토글 자리엔 IconPin (F-143 3.2, F-132.md 3·4장)
+function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
+  const isSelected = ctx.selection.ids.includes(doc.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const row: SelectionRow = { kind: 'doc', id: doc.id, key: rowKey('pinned', doc.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
+  const e2eeState = ctx.e2eeDocs.get(doc.id)
+  const title = displayDocTitle(doc.title)
+  const isUnread = ctx.unreadDocIds.has(doc.id)
+
+  const ownItems: FolderMenuItem[] = [
+    {
+      key: 'open-new-tab',
+      label: '새 탭에서 열기',
+      icon: IconOpenInNew,
+      onSelect: () => openDocInNewTab(doc.id),
+    },
+    pinMenuItem(doc, ctx.onTogglePin),
+    {
+      key: 'move',
+      label: '폴더로 이동…',
+      icon: IconMove,
+      onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title, folderId: doc.folderId }),
+    },
+    ...docE2eeItems(ctx, doc, title),
+    ...githubDocItems(ctx, doc, title),
+    {
+      key: 'delete',
+      label: '삭제',
+      icon: IconDelete,
+      danger: true,
+      onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title }),
+    },
+  ]
+  const items = isMulti ? ctx.multiMenuItems : ownItems
+
+  return (
+    <li role="listitem" className="tree-item">
+      <div
+        className={`tree-row${isSelected ? ' tree-row--selected' : ''}`}
+        data-unread={isUnread ? 'true' : undefined}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}
+      >
+        <span className="tree-toggle-spacer" aria-hidden="true">
+          <IconPin size={16} className="pinned-row-icon" />
+        </span>
+        <a
+          className="tree-label doc-item-btn"
+          href={formatHash(doc.id)}
+          draggable={false}
+          aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(doc.id)) }}
+        >
+          {title}
+          {isUnread && <TreeUnreadSr />}
+        </a>
+        {isUnread && <TreeUnreadDot />}
+        {e2eeState && <E2eeIcon />}
+        <FolderMenu
+          label={title}
+          items={items}
+          open={menuOpenHere ? true : undefined}
+          onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+          anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
+        />
+      </div>
+    </li>
+  )
+}
+
+// 공유받음 줄의 `⋯` 메뉴 — 항목은 `공유에서 나가기` 하나, 우클릭도 같은 메뉴 (F-2115 2.1)
+function SharedLeaveFolderMenu({ label, menuKey, target, ctx }: { label: string; menuKey: string; target: LeaveShareTarget; ctx: SidebarCtx }) {
+  const menu = ctx.sharedLeave
+  if (!menu) return null
+  const openHere = ctx.contextMenu?.key === menuKey
+  const create = ctx.sharedNewDoc
+  const items: FolderMenuItem[] = [
+    ...(create && target.type === 'folder' && sharedNewDocAllowed(target.id, ctx.sharedFolders ?? null)
+      ? [{ key: 'new-shared-doc', label: '새 문서', icon: IconNoteAdd, disabled: !create.online, onSelect: () => (create.online ? create.onCreate(target.id) : create.onUnavailable()) }]
+      : []),
+    {
+      key: 'leave-share',
+      label: '공유에서 나가기',
+      icon: IconGroupRemove,
+      danger: true,
+      disabled: !menu.online,
+      onSelect: () => (menu.online ? menu.onRequest(target) : menu.onUnavailable()),
+    },
+  ]
+  return (
+    <FolderMenu
+      label={label}
+      items={items}
+      open={openHere ? true : undefined}
+      onOpenChange={openHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+      anchorPoint={openHere ? ctx.contextMenu!.point : undefined}
+    />
+  )
+}
+
+// 공유받음 묶음의 문서 한 줄 — 끌어 옮기기가 없다. 직접 받은 줄에만 `⋯` 메뉴, 오른쪽에 소유자 이메일 앞부분 (F-212.md 2.4, F-2115)
+function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
+  const emailPrefix = doc.ownerEmail.split('@')[0] || doc.ownerEmail
+  const isUnread = ctx.unreadDocIds.has(doc.id)
+  const leaveTarget = ctx.sharedLeave ? leaveTargetOfDoc(doc) : null
+  const menuKey = `shared:${doc.id}`
+  return (
+    <li role="listitem" className="tree-item">
+      <div
+        className="tree-row shared-doc-row"
+        data-unread={isUnread ? 'true' : undefined}
+        onContextMenu={leaveTarget ? (e) => ctx.onSharedContextMenu(e, menuKey) : undefined}
+      >
+        <span className="tree-toggle-spacer" aria-hidden="true" />
+        <a
+          className="tree-label doc-item-btn"
+          href={formatHash(doc.id)}
+          draggable={false}
+          aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
+          onClick={(e) => { e.preventDefault(); ctx.onSelectDoc(doc.id) }}
+        >
+          {displayDocTitle(doc.title)}
+          {isUnread && <TreeUnreadSr />}
+        </a>
+        {isUnread && <TreeUnreadDot />}
+        <span className="shared-doc-owner">{emailPrefix}</span>
+        {leaveTarget && <SharedLeaveFolderMenu label={displayDocTitle(doc.title)} menuKey={menuKey} target={leaveTarget} ctx={ctx} />}
+      </div>
+    </li>
+  )
+}
+
+// 사이드바 `공유받음` 묶음 — 폴더로 받은 것은 폴더 이름 아래, 문서로 받은 것은 바로 (F-212.md 2.4)
+function SharedGroup({ sharedDocs, ctx, open, onToggle }: { sharedDocs: SharedDocLike[]; ctx: SidebarCtx; open: boolean; onToggle: () => void }) {
+  const groups = sharedFolderGroups(sharedDocs, ctx.sharedFolders ?? null)
+  const direct = sharedDocs.filter((doc) => !doc.viaFolder)
+  if (groups.length === 0 && direct.length === 0) return null
+
+  // 닫혀 있을 때만 — 열면 그 안의 문서 행으로 점이 옮겨간다 (F-510 3.3)
+  const isUnread = !open && sharedDocs.some((doc) => ctx.unreadDocIds.has(doc.id))
+
+  return (
+    <>
+      <h2>
+        <button
+          type="button"
+          className="shared-group-toggle"
+          data-unread={isUnread ? 'true' : undefined}
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          <IconChevron size={14} className={`tree-toggle-icon${open ? ' tree-toggle-icon--open' : ''}`} />
+          <IconGroup size={14} />
+          공유받음
+          {isUnread && <TreeUnreadSr />}
+          {isUnread && <TreeUnreadDot />}
+        </button>
+      </h2>
+      {open && (
+        <ul className="pinned-list shared-doc-list" role="list" aria-label="공유받은 문서">
+          {groups.map((group) => (
+            <li key={group.id} role="presentation" className="shared-doc-folder" data-shared-folder-id={group.id}>
+              <div
+                className="tree-row shared-folder-row"
+                onContextMenu={ctx.sharedLeave ? (e) => ctx.onSharedContextMenu(e, `shared-folder:${group.id}`) : undefined}
+              >
+                <span className="shared-doc-folder-name">{group.name}</span>
+                <SharedLeaveFolderMenu
+                  label={group.name}
+                  menuKey={`shared-folder:${group.id}`}
+                  target={leaveTargetOfFolder(group, sharedDocs)}
+                  ctx={ctx}
+                />
+              </div>
+              <ul role="list">
+                {sharedDocs.filter((doc) => doc.viaFolder?.id === group.id).map((doc) => (
+                  <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
+                ))}
+              </ul>
+            </li>
+          ))}
+          {direct.map((doc) => (
+            <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+type RailButtonProps = {
+  label: string
+  icon: ComponentType<{ size?: number }>
+  onClick?: () => void
+  href?: string
+}
+
+// 접힘 레일의 아이콘 전용 버튼(F-143 3.3, 툴팁은 오른쪽) — props.icon 을 구조 분해로 대문자 별칭하면 no-unused-vars 가 JSX 태그 참조를 못 잡는다
+// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3)
+function RailButton(props: RailButtonProps) {
+  const { label, onClick, href } = props
+  if (href) {
+    return (
+      <span className="icon-btn-wrap rail-btn-wrap">
+        <a className="icon-btn rail-btn" href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
+          <props.icon size={18} />
+        </a>
+        <IconTooltip text={label} side />
+      </span>
+    )
+  }
+  return (
+    <span className="icon-btn-wrap rail-btn-wrap">
+      <button type="button" className="icon-btn rail-btn" aria-label={label} onClick={onClick}>
+        <props.icon size={18} />
+      </button>
+      <IconTooltip text={label} side />
+    </span>
+  )
+}
+
+// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기·검색 — 가로로 나란히, 아이콘만(아래쪽 툴팁) (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
+function SidebarIconButton({
+  label,
+  icon: Icon,
+  onClick,
+  btnClassName,
+}: {
+  label: string
+  icon: ComponentType<{ size?: number }>
+  onClick?: () => void
+  btnClassName?: string
+}) {
+  return (
+    <span className="icon-btn-wrap">
+      <button type="button" className={btnClassName ? `icon-btn ${btnClassName}` : 'icon-btn'} aria-label={label} onClick={onClick}>
+        <Icon size={18} />
+      </button>
+      <IconTooltip text={label} />
+    </span>
+  )
+}
+
+type WidthHandleProps = {
+  width: number
+  onWidthChange: (width: number) => void
+  onWidthCommit: (width: number) => void
+}
+
+// 사이드바 오른쪽 테두리 너비 손잡이 — 끄는 동안 onWidthChange, 값 확정 시 onWidthCommit (F-159 2.5)
+function WidthHandle({ width, onWidthChange, onWidthCommit }: WidthHandleProps) {
+  const [dragging, setDragging] = useState(false)
+  // 드래그 중 사이드바가 rail 로 접히거나 좁아져 이 컴포넌트가 언마운트되면 mouseup 이 못 와 리스너가 안 지워진다 — 언마운트 시 직접 정리한다
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    return () => cleanupRef.current?.()
+  }, [])
+
+  function handleMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = width
+    setDragging(true)
+    document.body.classList.add('sidebar-resizing')
+
+    function next(clientX: number) {
+      return clampSidebarWidth(startWidth + (clientX - startX), window.innerWidth)
+    }
+    function handleMove(ev: MouseEvent) {
+      onWidthChange(next(ev.clientX))
+    }
+    function cleanup() {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      document.body.classList.remove('sidebar-resizing')
+      cleanupRef.current = null
+    }
+    function handleUp(ev: MouseEvent) {
+      cleanup()
+      setDragging(false)
+      onWidthCommit(next(ev.clientX))
+    }
+    cleanupRef.current = cleanup
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  function handleDoubleClick() {
+    onWidthCommit(DEFAULT_SIDEBAR_WIDTH)
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      onWidthCommit(clampSidebarWidth(width - ARROW_KEY_STEP, window.innerWidth))
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      onWidthCommit(clampSidebarWidth(width + ARROW_KEY_STEP, window.innerWidth))
+    }
+  }
+
+  return (
+    <div
+      className={`sidebar-resize-handle${dragging ? ' is-dragging' : ''}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="사이드바 너비"
+      aria-valuemin={MIN_SIDEBAR_WIDTH}
+      aria-valuemax={maxSidebarWidth(window.innerWidth)}
+      aria-valuenow={width}
+      tabIndex={0}
+      onMouseDown={handleMouseDown}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
+    />
+  )
+}
+
+type SidebarProps = {
+  sidebarRef: RefObject<HTMLElement | null>
+  narrow: boolean
+  open: boolean
+  collapsed: boolean
+  onToggleCollapse: () => void
+  // e2ee 는 금고 문서·폴더만 (F-405 6.1)
+  docs: Array<DocLike & { e2ee?: E2eeDocState }>
+  folders: Array<FolderLike & { e2ee?: true }>
+  sharedDocs: SharedDocLike[]
+  sharedGroupOpen: boolean
+  onToggleSharedGroup: () => void
+  currentDocId: string | null
+  openFolderIds: string[]
+  onToggleFolder: (id: string) => void
+  onCollapseAllFolders: () => void
+  onSelectDoc: (id: string) => void
+  onCreateDoc: (folderId?: string | null) => void
+  onCreateBoard: (folderId: string | null) => void
+  onImportDoc: () => void
+  onOpenLocalFile?: () => void // 로컬 파일을 열 수 있는 브라우저만 — `가져오기` 메뉴 첫 항목 (F-2155)
+  onCreateFolder: (parentId: string | null) => Promise<{ id: string; name: string } | null>
+  onRenameFolder: (id: string, name: string) => void
+  // 여러 항목 이동 — 폴더로 드래그·최상위로 옮기기 모두 이걸 쓴다(단일 항목도 배열 하나로) (F-255.md 3.3)
+  onBulkMove: (items: SelectionItem[], targetFolderId: string | null) => void
+  onRequestDeleteDoc: (target: DeleteDocTarget) => void
+  onRequestDeleteFolder: (target: DeleteFolderTarget) => void
+  onRequestBulkDelete: (items: SelectionItem[]) => void
+  onRequestMoveDoc: (target: MoveDocTarget) => void
+  onTogglePin: (id: string, pinned: boolean) => void
+  onOpenSettings: () => void
+  onOpenHelp: () => void
+  onOpenTrash?: () => void
+  account: AccountMenuProps
+  onOpenMap: () => void
+  onOpenTemplates: () => void
+  onOpenSearch: () => void
+  onOpenPalette: () => void
+  canInstall: boolean
+  onInstall: () => void
+  width: number
+  onWidthChange: (width: number) => void
+  onWidthCommit: (width: number) => void
+  isServerStore: boolean
+  onNotice: (notice: Notice) => void
+  onRequestInviteFolder: (id: string, name: string) => void
+  onExportFolder: (id: string) => void
+  onExportFolderVault: (id: string) => void
+  // 금고로 옮기기·빼기 메뉴 (F-407 7.1) — 금고 기능이 있을 때만 App 이 준다
+  e2eeConvert?: E2eeConvertMenu
+  // 안 읽은 F-507 알림이 있는 문서 id — 없거나 빈 집합이면 점이 하나도 없다 (F-510 3.3)
+  unreadNotificationDocIds?: ReadonlySet<string>
+  // 명령 팔레트 `새 폴더` 가 사이드바 안 동작(레일 펼치기·이름 칸 열기)을 부르는 자리 (F-2054 6.1)
+  commandRef?: RefObject<SidebarCommands | null>
+  sharedLeave?: SharedLeaveMenu
+  sharedNewDoc?: SharedNewDocMenu
+  sharedFolders?: SharedFolderItem[] | null
+  github?: SidebarGithub
+  // 잠긴 금고 폴더 문·`금고 잠그기` — 금고 범위가 없으면(메모리·공개 보기) 주지 않는다 (F-4003 3.1)
+  vault?: SidebarVault
+}
+
+// 명령 팔레트가 부르는 사이드바 동작 (F-2054 6.1)
+export type SidebarCommands = { createTopFolder: () => void }
+
+export default function Sidebar({
+  sidebarRef,
+  narrow,
+  open,
+  collapsed,
+  onToggleCollapse,
+  docs,
+  folders,
+  sharedDocs,
+  sharedGroupOpen,
+  onToggleSharedGroup,
+  currentDocId,
+  openFolderIds,
+  onToggleFolder,
+  onCollapseAllFolders,
+  onSelectDoc,
+  onCreateDoc,
+  onCreateBoard,
+  onImportDoc,
+  onOpenLocalFile,
+  onCreateFolder,
+  onRenameFolder,
+  onBulkMove,
+  onRequestDeleteDoc,
+  onRequestDeleteFolder,
+  onRequestBulkDelete,
+  onRequestMoveDoc,
+  onTogglePin,
+  onOpenSettings,
+  onOpenHelp,
+  onOpenTrash,
+  account,
+  onOpenMap,
+  onOpenTemplates,
+  onOpenSearch,
+  onOpenPalette,
+  canInstall,
+  onInstall,
+  width,
+  onWidthChange,
+  onWidthCommit,
+  isServerStore,
+  onNotice,
+  onRequestInviteFolder,
+  onExportFolder,
+  onExportFolderVault,
+  e2eeConvert,
+  unreadNotificationDocIds,
+  commandRef,
+  sharedLeave,
+  sharedNewDoc,
+  sharedFolders,
+  github,
+  vault,
+}: SidebarProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
+  // 끌고 있는 항목. 드래그 중에만 바뀌므로 렌더 비용은 무시할 만하다
+  const [dragged, setDragged] = useState<Dragged>(null)
+  // 여러 항목 선택 — 마우스 전용(F-255.md 1장 "하지 않는다"), Ctrl/Shift+클릭·우클릭으로 바뀐다
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+
+  const editingInputRef = useRef<HTMLInputElement | null>(null)
+  const skipBlurCommitRef = useRef(false)
+  // `새 폴더` 저장소 왕복이 끝나기 전(포커스가 아직 버튼에 있는 사이) Enter·재클릭이 들어와 폴더가 두 번 생기는 문제 방지 (F-246 3.1)
+  const creatingFolderRef = useRef(false)
+
+  useEffect(() => {
+    if (editingId && editingInputRef.current) {
+      editingInputRef.current.focus()
+      editingInputRef.current.select()
+    }
+  }, [editingId])
+
+  // 목록에서 사라진 id 는 선택에서 뺀다 — 렌더 중 상태를 맞추는 공식 패턴, useEffect 에서 바로 setState 하지 않는다 (F-255.md 3.1, D18)
+  const visibleIdsKey = [...docs.map((d) => d.id), ...folders.map((f) => f.id)].join(' ')
+  const [prunedForKey, setPrunedForKey] = useState(visibleIdsKey)
+  if (visibleIdsKey !== prunedForKey) {
+    setPrunedForKey(visibleIdsKey)
+    const visibleIds = visibleIdsKey === '' ? [] : visibleIdsKey.split(' ')
+    const next = pruneSelection(selection, visibleIds)
+    if (next.ids.length !== selection.ids.length || next.anchor !== selection.anchor) {
+      setSelection(next)
+    }
+  }
+
+  // 빈 곳 클릭·Esc·사이드바 밖 클릭으로 선택 해제 (F-255.md 2장, D7)
+  useEffect(() => {
+    if (selection.ids.length === 0) return
+    function handlePointerDown(e: MouseEvent) {
+      const nav = sidebarRef.current
+      if (nav && nav.contains(e.target as Node)) return
+      setSelection(EMPTY_SELECTION)
+    }
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setSelection(EMPTY_SELECTION)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selection.ids.length, sidebarRef])
+
+  const tree = buildTree({ folders, docs })
+  const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
+  const unreadDocIds = unreadNotificationDocIds ?? EMPTY_UNREAD_SET
+  const unreadFolderIds = foldersWithUnreadDocs(tree, unreadDocIds) // F-510 3.1·3.3
+  const e2eeFolderIds = new Set(folders.filter((f) => f.e2ee === true).map((f) => f.id))
+  // 잠긴 동안 금고 폴더는 저장된 펼침과 무관하게 접혀 보인다 — 펼침·안 읽음 점·Shift 범위가 모두 이 목록을 본다 (F-4003 2.3)
+  const shownOpenFolderIds = vault ? visibleOpenFolderIds(openFolderIds, e2eeFolderIds, vault.gate) : openFolderIds
+
+  function startRename(id: string, name: string) {
+    skipBlurCommitRef.current = false
+    setEditingId(id)
+    setEditingValue(name)
+  }
+
+  function commitRename() {
+    if (skipBlurCommitRef.current) {
+      skipBlurCommitRef.current = false
+      return
+    }
+    if (!editingId) return
+    const id = editingId
+    const value = editingValue
+    setEditingId(null)
+    onRenameFolder(id, value)
+  }
+
+  function handleRenameKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur() // onBlur 가 commitRename 을 부른다
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      skipBlurCommitRef.current = true
+      setEditingId(null) // 입력 전 이름 유지(커밋하지 않음)
+    }
+  }
+
+  async function handleCreateFolder(parentId: string | null) {
+    if (creatingFolderRef.current) return // 이미 만드는 중 — 조용히 무시 (F-246 3.2)
+    creatingFolderRef.current = true
+    try {
+      const folder = await onCreateFolder(parentId)
+      if (folder) startRename(folder.id, folder.name)
+    } finally {
+      creatingFolderRef.current = false
+    }
+  }
+
+  // 레일에서 `새 폴더`: 이름 입력 칸이 트리 안에 있어 먼저 펼친다 — 가드가 없으면 재진입마다 접힘·펼침이 뒤집힌다 (F-143 3.3)
+  function handleRailCreateFolder() {
+    if (creatingFolderRef.current) return
+    onToggleCollapse()
+    handleCreateFolder(null)
+  }
+
+  // 명령 팔레트 `새 폴더` — 레일(collapsed)이면 먼저 펼친 뒤 최상위에 만든다 (F-2054 6.1)
+  function createTopFolder() {
+    if (collapsed && !narrow) handleRailCreateFolder()
+    else handleCreateFolder(null)
+  }
+
+  useEffect(() => {
+    if (commandRef) commandRef.current = { createTopFolder }
+  })
+
+  function kindOf(id: string): 'doc' | 'folder' | null {
+    if (docs.some((d) => d.id === id)) return 'doc'
+    if (folders.some((f) => f.id === id)) return 'folder'
+    return null
+  }
+
+  const visibleRows = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds: shownOpenFolderIds })
+
+  // 일반 클릭은 그대로 열고 단독 선택도 겸한다. Ctrl/Cmd 는 더하고 빼기, Shift 는 화면 순서 범위 (F-255.md 2·3.1)
+  function handleItemClick(e: ReactMouseEvent<HTMLElement>, row: SelectionRow, action: () => void) {
+    if (e.ctrlKey || e.metaKey) {
+      setSelection((sel) => toggleSelection(sel, row))
+      return
+    }
+    if (e.shiftKey) {
+      setSelection((sel) => extendSelection(sel, row, visibleRows))
+      return
+    }
+    setSelection(replaceSelection(EMPTY_SELECTION, row))
+    action()
+  }
+
+  // 선택 안 우클릭 → 그 행만 선택하고 단일 메뉴, 선택(2개 이상) 안 우클릭 → 여러 항목 메뉴 (F-255.md 2·3.2)
+  function handleRowContextMenu(e: ReactMouseEvent<HTMLDivElement>, row: SelectionRow, isEditingRow: boolean) {
+    if (isEditingRow) return // 텍스트 편집 기본 메뉴가 필요하다 (D17)
+    e.preventDefault()
+    const point = { x: e.clientX, y: e.clientY }
+    const inMultiSelection = selection.ids.length > 1 && selection.ids.includes(row.id)
+    if (!inMultiSelection) {
+      setSelection(replaceSelection(EMPTY_SELECTION, row))
+    }
+    // 열쇠는 id 가 아니라 줄이다 — 고정된 문서는 두 줄이라 id 로 열면 메뉴가 둘 다 열리고 바깥 클릭 감지가 서로를 닫아 항목이 안 눌렸다 (2026-09-22 사용자 신고)
+    setContextMenu({ key: row.key, point })
+  }
+
+  // 공유받음 줄 우클릭 — 선택은 바꾸지 않고 그 줄 메뉴만 연다 (F-2115 2.1)
+  function handleSharedContextMenu(e: ReactMouseEvent<HTMLElement>, key: string) {
+    e.preventDefault()
+    setContextMenu({ key, point: { x: e.clientX, y: e.clientY } })
+  }
+
+  const selectedItems: SelectionItem[] = selection.ids
+    .map((id) => {
+      const kind = kindOf(id)
+      return kind ? { kind, id } : null
+    })
+    .filter((v): v is SelectionItem => v !== null)
+
+  // 선택한 것들의 공통 부모 아래 폴더를 만들고 옮긴 뒤 이름 편집을 연다 (F-255.md 2·3.3, D13)
+  async function handleGroupIntoFolder() {
+    if (creatingFolderRef.current || selectedItems.length === 0) return
+    creatingFolderRef.current = true
+    try {
+      const parentId = commonParentId(selectedItems, docs, folders)
+      const folder = await onCreateFolder(parentId)
+      if (!folder) return
+      onBulkMove(dedupeDescendants(selectedItems, docs, folders), folder.id)
+      startRename(folder.id, folder.name)
+    } finally {
+      creatingFolderRef.current = false
+    }
+  }
+
+  // 고른 것이 전부 이미 최상위면 `최상위로 옮기기` 는 아무 일도 못 하므로 빼둔다 (2026-09-22 사용자 신고)
+  const multiMenuItems: FolderMenuItem[] = [
+    {
+      key: 'new-folder',
+      label: '새 폴더로 넣기',
+      icon: IconFolderAdd,
+      onSelect: () => {
+        void handleGroupIntoFolder()
+      },
+    },
+    ...(allAtRoot(selectedItems, docs, folders)
+      ? []
+      : [
+          {
+            key: 'move-root',
+            label: '최상위로 옮기기',
+            icon: IconMove,
+            onSelect: () => onBulkMove(dedupeDescendants(selectedItems, docs, folders), null),
+          },
+        ]),
+    {
+      key: 'delete',
+      label: '삭제',
+      icon: IconDelete,
+      danger: true,
+      onSelect: () => onRequestBulkDelete(selectedItems),
+    },
+  ]
+
+  // ----- 끌어놓기 (specs/features/F-126.md 5.3, F-255.md 3.4, 마우스 전용) -----
+  function handleDragStart(e: DragEvent<HTMLDivElement>, type: 'doc' | 'folder', id: string) {
+    const isPartOfSelection = selection.ids.length > 1 && selection.ids.includes(id)
+    const items: SelectionItem[] = isPartOfSelection
+      ? selection.ids.map((sid) => ({ kind: kindOf(sid) ?? type, id: sid }))
+      : [{ kind: type, id }]
+    setDragged({ items })
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id) // Firefox 는 setData 를 호출해야 드래그가 시작된다
+    // 문서 하나면 칸 가장자리에 놓아 새 칸으로 열 수 있다 — 끝은 useTabDrag 의 창 dragend 가 정리
+    if (items.length === 1 && type === 'doc') startTabDrag({ pane: null, key: id })
+    if (items.length > 1) {
+      // 기본 드래그 이미지 대신 개수 배지 (F-255.md 3.4)
+      const badge = document.createElement('div')
+      badge.className = 'drag-count-badge'
+      badge.textContent = `${items.length}개 항목`
+      document.body.appendChild(badge)
+      e.dataTransfer.setDragImage(badge, 12, 12)
+      requestAnimationFrame(() => badge.remove())
+    }
+  }
+
+  function handleDragEnd() {
+    setDragged(null)
+    setDropTargetKey(null)
+  }
+
+  function canDropOn(target: DropTarget): boolean {
+    if (!dragged || dragged.items.length === 0) return false
+    if (target.type === 'doc') return false
+    // 문서는 폴더 행이나 최상위 빈 영역에만 놓을 수 있다 — 다른 문서 행에 놓으면 폴더 id 자리에 문서 id 가 저장되던 버그 수정 (F-136.md 3.2)
+    const targetParentId = target.type === 'root' ? null : target.id
+    const hasDoc = dragged.items.some((it) => it.kind === 'doc')
+    if (hasDoc) return true
+    // 폴더만 끄는 중: 그중 하나라도 이 대상으로 옮길 수 있어야 한다(나머지는 놓을 때 건너뛴다)
+    return dragged.items.some((it) => canMoveFolder({ folders, id: it.id, parentId: targetParentId }))
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>, target: DropTarget) {
+    if (!canDropOn(target)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTargetKey(dropKeyOf(target))
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>, target: DropTarget) {
+    e.preventDefault()
+    const wasDragged = dragged
+    setDropTargetKey(null)
+    setDragged(null)
+    if (!wasDragged || !canDropOn(target)) return
+    const targetParentId = target.type === 'root' ? null : target.id
+    onBulkMove(dedupeDescendants(wasDragged.items, docs, folders), targetParentId)
+  }
+
+  const e2eeDocs = new Map<string, E2eeDocState>()
+  for (const d of docs) if (d.e2ee) e2eeDocs.set(d.id, d.e2ee)
+
+  const ctx: SidebarCtx = {
+    currentDocId,
+    openFolderIds: shownOpenFolderIds,
+    editingId,
+    editingValue,
+    dropTargetKey,
+    onToggleFolder,
+    onSelectDoc,
+    onCreateDoc,
+    onCreateBoard,
+    onCreateFolder: handleCreateFolder,
+    onStartRename: startRename,
+    onEditingValueChange: setEditingValue,
+    onRenameKeyDown: handleRenameKeyDown,
+    onCommitRename: commitRename,
+    onRequestDeleteDoc,
+    onRequestDeleteFolder,
+    onRequestMoveDoc,
+    onTogglePin,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragOver: handleDragOver,
+    onDrop: handleDrop,
+    selection,
+    contextMenu,
+    sharedLeave,
+    sharedNewDoc,
+    sharedFolders,
+    github,
+    onSharedContextMenu: handleSharedContextMenu,
+    multiMenuItems,
+    onItemClick: handleItemClick,
+    onRowContextMenu: handleRowContextMenu,
+    onCloseContextMenu: () => setContextMenu(null),
+    isServerStore,
+    onNotice,
+    onRequestInviteFolder,
+    onExportFolder,
+    onExportFolderVault,
+    e2eeDocs,
+    e2eeFolderIds,
+    e2eeConvert,
+    allDocs: docs,
+    allFolders: folders,
+    vault,
+    unreadDocIds,
+    unreadFolderIds,
+  }
+
+  const rootTarget: DropTarget = { type: 'root' }
+  const isRootDropTarget = dropTargetKey === dropKeyOf(rootTarget)
+
+  const isRail = collapsed && !narrow
+
+  // 좁은 창 겹침 사이드바만 data-state + inert 전환 대상 (F-172.md 2.2), 데스크톱 폭은 대상이 아니다
+  const overlayState = narrow ? (open ? 'open' : 'closed') : undefined
+
+  return (
+    <nav
+      ref={sidebarRef}
+      id={SIDEBAR_ID}
+      data-ui="sidebar"
+      className={`sidebar${narrow ? ' sidebar--overlay' : ''}${isRail ? ' sidebar--collapsed' : ''}`}
+      data-state={overlayState}
+      inert={overlayState === 'closed'}
+      aria-label="문서 목록"
+    >
+      {/* 사이드바 전체 높이 머리 줄 — 좁은 창 겹침 사이드바에는 없다 (F-159 2.1·2.4) */}
+      {!narrow && (
+        <SidebarHead
+          variant="sidebar"
+          expanded={!collapsed}
+          collapsed={isRail}
+          onToggleSidebar={onToggleCollapse}
+          onOpenSearch={onOpenSearch}
+          onOpenPalette={onOpenPalette}
+        />
+      )}
+      <div className="sidebar-inner">
+        {isRail ? (
+          <div className="sidebar-rail-scroll">
+            <RailButton icon={IconSearch} label={SEARCH_LABEL} onClick={onOpenSearch} />
+            <RailButton icon={IconCommandPalette} label={PALETTE_LABEL} onClick={onOpenPalette} />
+            <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+            <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
+            {github || onOpenLocalFile ? <ImportMenu variant="rail" onOpenLocalFile={onOpenLocalFile} onFile={onImportDoc} github={github} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+            <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
+            <RailButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
+          </div>
+        ) : (
+          <>
+            {/* 문서 많아져도 같이 스크롤되지 않는 고정 영역 — 동작 버튼·고정됨 묶음
+                (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */}
+            <div className="sidebar-fixed">
+              <div className="sidebar-actions">
+                <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
+                <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+                <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
+                {github || onOpenLocalFile ? <ImportMenu variant="bar" onOpenLocalFile={onOpenLocalFile} onFile={onImportDoc} github={github} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+                <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
+                <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
+                <SidebarIconButton icon={IconTemplates} label="템플릿 관리" btnClassName="sidebar-templates-btn" onClick={onOpenTemplates} />
+                <SidebarMoreMenu onOpenMap={onOpenMap} onOpenTemplates={onOpenTemplates} onCreateBoard={() => onCreateBoard(null)} />
+              </div>
+              {pinned.length > 0 && (
+                <>
+                  <h2>
+                    <IconPin size={14} />
+                    고정됨
+                  </h2>
+                  <ul className="pinned-list" role="list" aria-label="고정된 문서">
+                    {pinned.map((doc) => (
+                      <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div
+              className="sidebar-scroll"
+              data-ui="sidebar-list"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
+              }}
+              onContextMenu={(e) => {
+                // 행이 이미 자기 메뉴를 열었거나 입력칸이면 그대로 둔다
+                if (e.defaultPrevented || (e.target as HTMLElement).closest('input, textarea')) return
+                handleSharedContextMenu(e, ROOT_MENU_KEY)
+              }}
+            >
+              <SharedGroup sharedDocs={sharedDocs} ctx={ctx} open={sharedGroupOpen} onToggle={onToggleSharedGroup} />
+              <h2>문서</h2>
+              <ul className="doc-list" role="tree" aria-label="문서와 폴더">
+                {tree.map((node) => (
+                  <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
+                ))}
+              </ul>
+              <div
+                className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
+                onDragOver={(e) => handleDragOver(e, rootTarget)}
+                onDrop={(e) => handleDrop(e, rootTarget)}
+                onClick={() => setSelection(EMPTY_SELECTION)}
+              />
+              <FolderMenu
+                label="문서 목록 메뉴"
+                hideTrigger
+                items={[
+                  { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => onCreateDoc(null) },
+                  { key: 'new-folder', label: '새 폴더', icon: IconFolderAdd, onSelect: () => handleCreateFolder(null) },
+                  { key: 'new-board', label: '새 칸반 보드', icon: IconKanban, onSelect: () => onCreateBoard(null) },
+                  { key: 'import', label: '.md 파일 가져오기', icon: IconUpload, onSelect: onImportDoc },
+                  ...(github
+                    ? [
+                        { key: 'github-import', label: 'GitHub에서 가져오기', icon: IconUpload, onSelect: github.onImport },
+                        { key: 'github-new', label: 'GitHub에 새 파일', icon: IconCommit, onSelect: github.onNewFile },
+                      ]
+                    : []),
+                  { key: 'collapse-all', label: '모두 접기', icon: IconCollapseAll, onSelect: onCollapseAllFolders },
+                  { key: 'map', label: '지도', icon: IconMap, onSelect: onOpenMap },
+                  { key: 'templates', label: '템플릿 관리', icon: IconTemplates, onSelect: onOpenTemplates },
+                ]}
+                open={contextMenu?.key === ROOT_MENU_KEY ? true : undefined}
+                onOpenChange={contextMenu?.key === ROOT_MENU_KEY ? (v) => { if (!v) setContextMenu(null) } : undefined}
+                anchorPoint={contextMenu?.key === ROOT_MENU_KEY ? contextMenu.point : undefined}
+              />
+            </div>
+          </>
+        )}
+
+        {isRail ? (
+          <div className="sidebar-rail-bottom">
+            {canInstall && <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />}
+            {onOpenTrash && <RailButton icon={IconDelete} label="휴지통" onClick={onOpenTrash} />}
+            <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+            <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
+            <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            <AccountMenu {...account} variant="rail" />
+          </div>
+        ) : (
+          <SidebarFooter account={account} canInstall={canInstall} onInstall={onInstall} onOpenHelp={onOpenHelp} onOpenTrash={onOpenTrash} onOpenSettings={onOpenSettings} />
+        )}
+      </div>
+      {/* 너비 손잡이 — 레일·좁은 창에는 없다 (F-159 2.5) */}
+      {!narrow && !isRail && <WidthHandle width={width} onWidthChange={onWidthChange} onWidthCommit={onWidthCommit} />}
+    </nav>
+  )
+}

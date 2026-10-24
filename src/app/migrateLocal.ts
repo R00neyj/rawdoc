@@ -1,6 +1,6 @@
 // 로컬 → 계정 이관(F-208.md 2장, 계정마다 한 번, 옮긴 계정 id 를 md.localMigrated 로 기록) 및 로컬 금고 로그인 이관(F-408.md 3.3·4장, checkLocalE2eeMigration·runLocalE2eeMigration)
 import type { Attachment, AttachmentExt, Doc, Folder } from '../types'
-import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
+import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './help/guideDoc'
 import { encryptLocalPlainAttachment, planLocalE2eeMigration, rekeyLocalE2eeAttachment, rekeyLocalE2eeDoc, type LocalE2eeKeys } from '../e2ee/convert'
 import type { ServerStore } from '../storage/serverStore'
 import type { CommentRecord } from '../lib/comments/docComments'

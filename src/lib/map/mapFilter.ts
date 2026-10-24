@@ -1,5 +1,5 @@
 // 지도 필터 — 무엇을 보이게 두고 무엇을 배경으로 가라앉히나. DOM 도 three 도 import 하지 않는 순수 모듈이다 (specs/features/F-2007.md 3장)
-import { matchDoc, parseSearchQuery, type ParsedQuery, type SearchDocInput } from '../docSearch'
+import { matchDoc, parseSearchQuery, type ParsedQuery, type SearchDocInput } from '../search/docSearch'
 
 // 걸러진 것을 --panel 쪽으로 섞는 비율. F-292 결정 14 가 정한 값이고 F-2010 의 MAP_HOVER_DIM 과 같다 (9장)
 export const MAP_FILTER_DIM = 0.85

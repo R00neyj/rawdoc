@@ -19,7 +19,7 @@ import { PALETTE_COMMANDS, recentFileCommands } from './paletteCommands'
 import { prepareDocIndex } from './paletteDocs'
 import { parseCommandIds, pushRecentCommand, togglePinnedCommand } from './paletteMemory'
 import { getPref, setPref } from '../prefs'
-import { nextResultIndex } from '../searchResults'
+import { nextResultIndex } from '../search/searchResults'
 
 type Stage = { kind: 'commands' } | { kind: 'pick'; command: PalettePickCommand }
 type Target = 'here' | 'newTab'

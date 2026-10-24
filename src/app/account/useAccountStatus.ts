@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { fetchAccount, type AccountState } from './account'
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../../lib/account/usageLimits'
 import type { ServerStore } from '../../storage/serverStore'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { UseE2ee } from '../vault/useE2ee'
 import type { Store } from '../../types'
 

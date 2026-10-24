@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ensureWritePermission, localFileSupported } from '../../lib/fileSystemAccess'
 import type { RecentFileItem, RecentFileRow } from '../../lib/recentFiles'
 import { createRecentFilesStore, type RecentFilesStore } from '../../storage/recentFilesStore'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { UseLocalFileResult } from './useLocalFile'
 
 export type UseRecentFilesResult = { files: readonly RecentFileItem[]; open(id: string): Promise<void>; remove(id: string): Promise<void> }

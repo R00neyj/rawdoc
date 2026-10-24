@@ -1,6 +1,6 @@
 // 댓글 카드 하나 — 첫 댓글·답글·해결 버튼·`⋯` 메뉴·답글 입력칸 (specs/features/F-505.md 3장·7.2~7.4). 답글칸 멘션 후보는 F-507 MentionField
 import { useContext, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import FolderMenu from '../FolderMenu'
+import FolderMenu from '../sidebar/FolderMenu'
 import Dialog from '../Dialog'
 import {
   commentAllowed,

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import AppDialogs, { type AppDialogsProps } from '../../../src/app/AppDialogs'
 import Dialog from '../../../src/app/Dialog'
-import ConfirmDeleteDialog from '../../../src/app/ConfirmDeleteDialog'
+import ConfirmDeleteDialog from '../../../src/app/sidebar/ConfirmDeleteDialog'
 import E2eeMigrateDialog from '../../../src/app/vault/E2eeMigrateDialog'
 
 // jsdom 없이 컴포넌트 함수를 직접 불러 엘리먼트 트리를 훑는다 (F-2081 6장)

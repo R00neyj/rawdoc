@@ -14,7 +14,7 @@ import {
   replaceSelectionChanges,
   type ContextMenuState,
 } from './contextMenuActions'
-import type { NoticeWithAction } from './NoticeBar'
+import type { NoticeWithAction } from './notices/NoticeBar'
 import type { UseDocCommentsResult } from './comments/useDocComments'
 
 export type UseContextMenuOptions = {

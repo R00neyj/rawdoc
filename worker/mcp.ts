@@ -1,7 +1,7 @@
 // POST /mcp — 원격 MCP 서버. 요청마다 서버를 새로 만들어 호출자를 닫아 넣는다 (F-3030 3장)
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server'
 import brand from '../brand.config'
-import { TRASH_RETENTION_DAYS } from '../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../src/lib/trash/trash'
 import { errorResponse } from './http'
 import { authenticateMcp } from './mcpAuth'
 import type { McpCall } from './mcpCall'

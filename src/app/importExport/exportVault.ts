@@ -20,7 +20,7 @@ import {
 } from './exportWorkspace'
 import { downloadBlob } from './exportDoc'
 import type { Doc, Folder } from '../../types'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 export type VaultPlanDoc = { doc: Doc; path: string } // path: zip 안 경로, '.md' 포함
 export type VaultLinkContext = {

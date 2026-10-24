@@ -1,6 +1,6 @@
 // 사람용·--json 렌더링, 오류 → 종료 코드 (specs/features/F-2021.md 4.3~4.5)
 import type { FolderLike } from '../../src/lib/folderTree'
-import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash/trash'
 import { folderPathOf } from './docMeta'
 import type { PutPreview } from './putPreview'
 

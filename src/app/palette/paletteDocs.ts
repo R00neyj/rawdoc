@@ -1,5 +1,5 @@
 // 팔레트 문서 목록·거르기·새 문서 만들기 계획 — 순수 함수 (specs/features/F-2053.md 4·6장)
-import { prepareMatchText, splitMatchTerms, matchTerm, type MatchText } from '../../lib/hangulMatch'
+import { prepareMatchText, splitMatchTerms, matchTerm, type MatchText } from '../../lib/search/hangulMatch'
 import { E2EE_MAX_PLAIN_TITLE_CHARS } from '../../lib/vault/e2eeLimits'
 import type { PaletteDoc, PaletteCreatePlan } from './paletteContract'
 import type { WikiResolver } from '../../lib/wikiResolve'

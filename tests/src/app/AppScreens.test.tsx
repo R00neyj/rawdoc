@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import AppScreens, { type AppScreensProps } from '../../../src/app/AppScreens'
 import SharedView from '../../../src/app/share/SharedView'
 import SharesPage from '../../../src/app/share/SharesPage'
-import HelpPage from '../../../src/app/HelpPage'
-import TrashPage from '../../../src/app/TrashPage'
+import HelpPage from '../../../src/app/help/HelpPage'
+import TrashPage from '../../../src/app/trash/TrashPage'
 import EmptyState from '../../../src/app/EmptyState'
 
 // jsdom 없이 컴포넌트 함수를 직접 불러 엘리먼트 트리를 훑는다 (F-2081 6장)

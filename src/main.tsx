@@ -51,7 +51,7 @@ import './styles/phoneTabs.css'
 import 'github-markdown-css/github-markdown-light.css'
 import './styles/codeCopy.css'
 import './viewer/viewer.css'
-import './app/viewFind.css'
+import './app/search/viewFind.css'
 import './styles/wikiPreview.css'
 
 import { getPref } from './app/prefs'

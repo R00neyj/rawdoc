@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { DEFAULT_VIEW_OPTIONS, resolveDefaultView, resolveInitialViewMode } from '../../../../src/app/appearance/defaultView'
-import { VIEW_MODES } from '../../../../src/app/ViewModeMenu'
+import { VIEW_MODES } from '../../../../src/app/topbar/ViewModeMenu'
 import { getPref, setPref } from '../../../../src/app/prefs'
 
 beforeEach(() => {

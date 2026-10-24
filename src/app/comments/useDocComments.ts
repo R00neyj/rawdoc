@@ -22,7 +22,7 @@ import { observeCommentKeys, type CommentDraft, type CommentLayout, type EditorC
 import { createCommandCommentWriter, type CommandCommentWriter, type CommentCommandClient } from './commentOps'
 import { commentAccess as computeCommentAccess, commentRailMode, initialCommentRailOpen, type CommentAccess } from './commentRail'
 import { getPref, setPref } from '../prefs'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { LineEnding } from '../../types'
 
 // ----- 3.2 쓰기 실패 사유·결과 -----

@@ -1,6 +1,6 @@
 // 전체·명령별 도움말 순수 함수 (specs/features/F-2132.md 5장)
 import brand from '../../brand.config'
-import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash/trash'
 import { COMMAND_NAMES, type CommandName } from './args'
 import { SIDECAR_SUFFIX } from './sidecar'
 

@@ -2,7 +2,7 @@
 // B1 은 IndexedDB 가 없으므로 이 저장소로만 동작한다 (F-110 이 idbStore 로 교체)
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import type { CommentRecord } from '../lib/comments/docComments'
-import { restoreFolderId, trashPathOf } from '../lib/trash'
+import { restoreFolderId, trashPathOf } from '../lib/trash/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding, FolderDeleteMode } from '../types'
 
 function clone<T extends object>(doc: T): T {

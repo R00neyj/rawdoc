@@ -4,14 +4,14 @@ import { DEFAULT_DB_NAME, createIdbStore, markLocalE2eeMigrated, readE2eeRow } f
 import type { ServerStore } from '../../storage/serverStore'
 import { checkLocalE2eeMigration, runLocalE2eeMigration } from '../migrateLocal'
 import type { LocalE2eeKeys } from '../../e2ee/convert'
-import { purgeTrashDoc } from '../trashApi'
+import { purgeTrashDoc } from '../trash/trashApi'
 import { lockDocMetas, planE2eeReset, type E2eeStore } from '../../e2ee/e2eeStore'
 import type { Folder, Store } from '../../types'
 import type { AccountState } from '../account/account'
-import type { DocMeta } from '../docMeta'
+import type { DocMeta } from '../sidebar/docMeta'
 import type { DocUnit } from '../session/docUnit'
 import { openE2eeIds } from '../panes/paneRules'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { UseE2ee } from './useE2ee'
 
 export type UseE2eeMigrateOptions = {

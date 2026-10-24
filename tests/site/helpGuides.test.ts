@@ -1,10 +1,10 @@
 // 도움말 ↔ 사용법 글 분담 규칙 (specs/features/F-2039.md 2장 R3~R7, 8.2 U4~U7)
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
-import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash/trash'
 import { fileURLToPath } from 'node:url'
 import { findFrontmatter, parseSimpleProperties } from '../../src/lib/frontmatter'
-import { HELP_DOC_CONTENT } from '../../src/app/helpDoc'
+import { HELP_DOC_CONTENT } from '../../src/app/help/helpDoc'
 import brand from '../../brand.config'
 import {
   E2EE_MIN_PASSWORD_CHARS,
@@ -24,7 +24,7 @@ import { RETAIN_MS } from '../../src/storage/yjsStore'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../../src/app/importExport/attachImages'
 import { MAX_SIDE } from '../../src/lib/shrinkImage'
 import { GRACE_MS } from '../../src/app/importExport/attachmentGc'
-import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../../src/lib/docSearch'
+import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../../src/lib/search/docSearch'
 import { ACCOUNT_DELETE_FRESH_MS } from '../../src/lib/account/accountDeletion'
 import {
   COMMENT_BODY_MAX,
@@ -36,7 +36,7 @@ import {
 } from '../../src/lib/comments/docComments'
 import { COMMENT_BODY_COUNTER_FROM } from '../../src/app/comments/commentRail'
 import { MENTION_CANDIDATES_MAX } from '../../src/app/comments/mentionCandidates'
-import { NOTIFICATIONS_POLL_MS, notificationLines, notificationText } from '../../src/app/notificationsApi'
+import { NOTIFICATIONS_POLL_MS, notificationLines, notificationText } from '../../src/app/notifications/notificationsApi'
 import { COMMENT_TEXT } from '../../src/app/comments/useDocComments'
 import { EditorState } from '@codemirror/state'
 import { insertTable, insertCallout, insertMathBlock } from '../../src/editor/insertCommands'
@@ -51,24 +51,24 @@ import { toggleMath } from '../../src/editor/formatCommands'
 import { toPlainText } from '../../src/viewer/toPlainText'
 import { renderMarkdown } from '../../src/viewer/renderMarkdown'
 import { checkContentFile } from '../../site/guard'
-import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } from '../../src/app/userCssSync'
-import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
-import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
-import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
+import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } from '../../src/app/userCss/userCssSync'
+import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCss/userCssEdit'
+import { USER_CSS_SAFE_NOTICE } from '../../src/app/notices/appNotices'
+import type { UserCssRemoval } from '../../src/lib/userCss/userCssPolicy'
 import { WARN_RATIO, DANGER_RATIO, HINT_IMAGES, HINT_DOCS } from '../../src/lib/account/usageGauge'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../src/app/wikiPreview'
 import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/share/accessRequest'
 import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/share/leaveShare'
 import { PUSH_BATCH_MS, PUSH_SHARE_DEDUPE_MS, PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS, PUSH_SUBSCRIPTIONS_PER_USER_MAX } from '../../src/lib/pushPayload'
 import { commentPushPayload } from '../../src/lib/pushText'
-import { pushSettingsView } from '../../src/app/pushClient'
+import { pushSettingsView } from '../../src/app/notifications/pushClient'
 import { TODO_MAX_ITEMS } from '../../src/lib/docTodos'
 import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/map/localGraph'
 import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
 import { CALENDAR_DEFAULT_FORMAT } from '../../src/lib/calendar'
-import { DEFAULT_TASK_FILTER } from '../../src/app/useTaskFilter'
+import { DEFAULT_TASK_FILTER } from '../../src/app/rightPanel/useTaskFilter'
 import { PHONE_QUERY } from '../../src/app/phone/usePhoneWidth'
-import { NARROW_QUERY } from '../../src/app/useSidebarLayout'
+import { NARROW_QUERY } from '../../src/app/sidebar/useSidebarLayout'
 import { GITHUB_PUSH_MAX_IMAGES } from '../../src/lib/github/githubContract'
 import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../src/app/github/githubImages'
 import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/github/githubUi'
@@ -507,7 +507,7 @@ describe('comments 글', () => {
   })
 })
 
-// 사용법 글 custom-css (write-guide, 2026-09-30) — 변수·훅 이름과 상한은 tests/src/lib/userCssGuide.test.ts
+// 사용법 글 custom-css (write-guide, 2026-09-30) — 변수·훅 이름과 상한은 tests/src/lib/userCss/userCssGuide.test.ts
 describe('custom-css 글', () => {
   const raw = readGuide('custom-css')
   const code = (text: string) => '`' + text + '`'
@@ -738,7 +738,7 @@ describe('ai-connectors 글', () => {
     }
     expect(source('../../worker/loginPage.ts')).toContain("'앱 연결을 계속하려면 로그인하세요. ")
     expect(raw).toContain('`앱 연결을 계속하려면 로그인하세요.`')
-    expect(source('../../src/app/trashView.ts')).toContain('`${name}에서 지움`')
+    expect(source('../../src/app/trash/trashView.ts')).toContain('`${name}에서 지움`')
     expect(raw).toContain('`{앱 이름}에서 지움`')
     expect(source('../../src/app/account/connectedApps.ts')).toContain('· 아직 사용 안 함')
     expect(raw).toContain('`아직 사용 안 함`')

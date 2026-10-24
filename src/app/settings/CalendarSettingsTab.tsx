@@ -1,6 +1,6 @@
-import TemplateSelectField from '../TemplateSelectField'
+import TemplateSelectField from '../templates/TemplateSelectField'
 import { calendarDocTitle, CALENDAR_DEFAULT_FORMAT } from '../../lib/calendar'
-import type { TemplateEntry } from '../../lib/templates'
+import type { TemplateEntry } from '../../lib/templates/templates'
 
 // 설정 `오른쪽 패널` 탭의 달력 묶음 — 날짜 문서 위치·제목 형식·템플릿, 기기별 (small 2026-10-10)
 export type CalendarSettings = {

@@ -1,8 +1,8 @@
 // 설치 앱 문서 탭 줄 — 편집기 도구 막대 위, 메인 열 폭. 상태는 useDocTabs 가 갖고 여기는 그리기와 끌기만 (small 2026-10-21)
 import { useEffect, useRef, useState, type DragEvent } from 'react'
-import FolderMenu, { type FolderMenuItem } from '../FolderMenu'
+import FolderMenu, { type FolderMenuItem } from '../sidebar/FolderMenu'
 import { IconAdd, IconClose, IconMore } from '../icons'
-import { displayDocTitle } from '../docMeta'
+import { displayDocTitle } from '../sidebar/docMeta'
 import { currentTabDrag, endTabDrag, startTabDrag, useTabDrag } from './useTabDrag'
 import type { DocTabBarProps } from './useDocTabs'
 

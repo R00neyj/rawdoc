@@ -17,7 +17,7 @@ async function bundleCompiler() {
     build: {
       write: false,
       minify: false,
-      lib: { entry: 'src/app/userCssCompile.ts', formats: ['iife'], name: 'UserCssCompile' },
+      lib: { entry: 'src/app/userCss/userCssCompile.ts', formats: ['iife'], name: 'UserCssCompile' },
     },
   })
   return (Array.isArray(result) ? result[0] : result).output[0].code

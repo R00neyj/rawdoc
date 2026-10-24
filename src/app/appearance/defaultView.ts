@@ -1,5 +1,5 @@
 // 설정 "기본 뷰" — 부팅 때 쓸 보기 모드 판정 (F-2112 2.1)
-import type { ViewMode } from '../ViewModeMenu'
+import type { ViewMode } from '../topbar/ViewModeMenu'
 import { getPref } from '../prefs'
 
 export type DefaultView = 'remember' | ViewMode

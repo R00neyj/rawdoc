@@ -6,8 +6,8 @@ import type { LineEnding } from '../../lib/lineEnding'
 import { postDocGithubPull, postDocGithubSynced, type GithubResult } from './githubApi'
 import { lineEndingNote, mergedTooLarge, pullFailureMessage, PULL_OFFLINE_MESSAGE, readPulled, sameNotice, type PulledText } from './githubPull'
 import { githubErrorMessage } from './githubUi'
-import type { NoticeWithAction } from '../NoticeBar'
-import type { LiveStatus } from '../StatusBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
+import type { LiveStatus } from '../topbar/StatusBar'
 
 export type GithubPullCompare = {
   docId: string

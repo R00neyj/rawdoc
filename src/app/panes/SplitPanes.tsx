@@ -15,7 +15,7 @@ import type { DocPanes, DocTabBarProps } from './useDocTabs'
 import type { PaneHost } from './usePaneHost'
 import type { DocUnit } from '../session/docUnit'
 import type { CommentAccess } from '../comments/commentRail'
-import type { ViewMode } from '../ViewModeMenu'
+import type { ViewMode } from '../topbar/ViewModeMenu'
 
 type AreaProps = Omit<DocumentAreaProps, 'focused' | 'paneSources' | 'unit'>
 type PaneCopy = { docId: string | null; html: string; board: boolean }

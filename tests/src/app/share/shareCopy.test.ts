@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { copyShareLink, copyShareMarkdown, WARN_LINK_LENGTH, type ShareCopyDeps } from '../../../../src/app/share/shareCopy'
 import { decodeShare } from '../../../../src/lib/share/shareCodec'
-import type { Notice } from '../../../../src/app/notice'
+import type { Notice } from '../../../../src/app/notices/notice'
 
 const BASE_URL = 'https://x.test/'
 

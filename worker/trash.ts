@@ -9,7 +9,7 @@ import { notifyTrashed } from './docRoomRpc'
 import { purgeQuietly } from './purgeJobs'
 import { dayUsageStatement, purgeDocsUsageStatement, type DocIdSubquery } from './usage'
 import { descendantFolderIds, type FolderLike } from '../src/lib/folderTree'
-import { TRASH_RETENTION_DAYS, trashPathOf, trashPurgeAt, type TrashActor, type TrashItem } from '../src/lib/trash'
+import { TRASH_RETENTION_DAYS, trashPathOf, trashPurgeAt, type TrashActor, type TrashItem } from '../src/lib/trash/trash'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 // 만료 한 번의 문서 수 — 비우기와 같은 16문장이 문서 수와 무관하게 끝나도록 상한만 둔다 (5장)

@@ -4,7 +4,7 @@ import { helpContent } from '../../site/helpPage'
 import { checkContentFile } from '../../site/guard'
 import { renderSitePage } from '../../site/render'
 import { renderMarkdown } from '../../src/viewer/renderMarkdown'
-import { HELP_DOC_CONTENT } from '../../src/app/helpDoc'
+import { HELP_DOC_CONTENT } from '../../src/app/help/helpDoc'
 
 describe('F-274 A1 helpContent', () => {
   it('프론트매터로 시작하고 그 뒤가 HELP_DOC_CONTENT 와 정확히 같다', () => {

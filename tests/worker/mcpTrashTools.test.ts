@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { DAILY_WRITE_LIMIT, utcDay } from '../../worker/usage'
-import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash/trash'
 
 type Worker = {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response>

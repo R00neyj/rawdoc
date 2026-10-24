@@ -1,6 +1,6 @@
 // 사이드바 금고 묶음(펼침 문·금고 잠그기)과 검색·지도를 열 때 금고 상태 읽기 (specs/features/F-4003.md 3.3)
 import { useEffect } from 'react'
-import type { SidebarVault } from '../Sidebar'
+import type { SidebarVault } from '../sidebar/Sidebar'
 import type { UseE2ee } from './useE2ee'
 import { unlockVaultFolder, vaultFolderGate } from './vaultVisibility'
 

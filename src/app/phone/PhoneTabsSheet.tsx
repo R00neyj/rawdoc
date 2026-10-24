@@ -1,7 +1,7 @@
 // 휴대폰 탭 고르기 — 화면 전체, 문서를 줄여 보인 카드, 누르면 전환, × 닫기, ＋ 새 탭 (small 2026-10-22)
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocTabBarProps } from '../panes/useDocTabs'
-import { displayDocTitle } from '../docMeta'
+import { displayDocTitle } from '../sidebar/docMeta'
 import { IconClose } from '../icons'
 import { useBackToClose } from './useBackToClose'
 import { readOverlayMark } from '../historyEntries'

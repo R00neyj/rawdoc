@@ -7,7 +7,7 @@ import { Y_COMMENTS_NAME } from '../../lib/docRoomProtocol'
 import type { CommentRecord } from '../../lib/comments/docComments'
 import type { ScrollAnchor } from '../../lib/scrollAnchor'
 import type { LineEnding } from '../../types'
-import type { ViewMode } from '../ViewModeMenu'
+import type { ViewMode } from '../topbar/ViewModeMenu'
 import { buildLocalCommentRecords } from '../comments/useDocComments'
 
 export type PaneEntry = {

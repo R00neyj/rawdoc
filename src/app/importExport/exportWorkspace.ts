@@ -6,7 +6,7 @@ import { extractAttachmentRefs } from '../../lib/imageBlock'
 import { descendantFolderIds, type FolderLike } from '../../lib/folderTree'
 import { downloadBlob } from './exportDoc'
 import type { Doc, Folder } from '../../types'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 export type ExportScope = { kind: 'all' } | { kind: 'folder'; folderId: string }
 

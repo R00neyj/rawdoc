@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import Dialog from '../Dialog'
 import { downloadBlob } from '../importExport/exportDoc'
-import { DELETE_TRASH_TEXT } from '../trashView'
+import { DELETE_TRASH_TEXT } from '../trash/trashView'
 import { E2EE_MIN_PASSWORD_CHARS, isE2eePasswordLongEnough } from '../../lib/vault/e2eeLimits'
 import type { E2eeActionError, E2eeScope, Keyring } from '../../e2ee/keyring'
 

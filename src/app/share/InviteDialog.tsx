@@ -3,7 +3,7 @@ import Dialog from '../Dialog'
 import { IconLink } from '../icons'
 import { formatHash } from '../hashRoute'
 import { listGrants, putGrant, deleteGrant, type Grant, type GrantRole, type GrantTargetType } from '../../storage/docsApi'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 // D-4 사람 초대 (specs/features/F-225.md 2장). 공유 메뉴(문서)·폴더 ⋯ 메뉴에서 owner 일 때 연다
 export type InviteTarget = { type: GrantTargetType; id: string; name: string } | null

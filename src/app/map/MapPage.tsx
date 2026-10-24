@@ -1,9 +1,9 @@
 // 위키링크 지도 전체 화면 (specs/features/F-292.md 6장) — 사이드바 `지도` 버튼으로 들어온다
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
-import { buildSearchIndex, folderPathMap, type SearchIndexEntry } from '../searchIndex'
+import { buildSearchIndex, folderPathMap, type SearchIndexEntry } from '../search/searchIndex'
 import { buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, type WikiGraph } from '../../lib/wikiGraph'
-import { parseSearchQuery } from '../../lib/docSearch'
+import { parseSearchQuery } from '../../lib/search/docSearch'
 import {
   computeGroupColors,
   computeVisibleNodes,
@@ -22,7 +22,7 @@ import { hasWebGL2 } from './webgl2'
 import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from '../usePresence'
 import { loadMapGroups, loadMapView, saveMapGroups, saveMapView, type MapGroup, type MapView } from './mapPrefs'
-import FolderMenu from '../FolderMenu'
+import FolderMenu from '../sidebar/FolderMenu'
 import { openDocInNewTab } from '../panes/openInNewTab'
 import type { Doc, Folder } from '../../types'
 

@@ -8,9 +8,9 @@ import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import { fetchRequestToken } from './requestToken'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from '../icons'
 import usePresence from '../usePresence'
-import MenuItemSkeleton from '../MenuItemSkeleton'
+import MenuItemSkeleton from '../sidebar/MenuItemSkeleton'
 import ShareSetDialog from './ShareSetDialog'
-import type { Notice } from '../notice'
+import type { Notice } from '../notices/notice'
 
 // 상단바 `공유` 메뉴 — FolderMenu 와 같은 패턴으로 방향키·Enter·Esc·바깥 클릭을 직접 구현한다 (ia.md 2장 A·3.19, F-130.md 2장, F-126.md 5.2)
 // 링크·마크다운 복사 본문은 shareCopy.ts 로 옮겼다 — 명령 팔레트와 같이 쓴다 (F-2054 6.2)

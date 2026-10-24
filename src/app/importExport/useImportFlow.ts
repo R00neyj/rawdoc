@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispat
 import type { AttachmentExt, Doc, Folder, LineEnding, Store } from '../../types'
 import { ancestorsOfDoc, folderAncestors } from '../../lib/folderTree'
 import type { ShareDoc } from '../../lib/share/shareCodec'
-import { stripContent, sortByUpdatedAtDesc, type DocMeta } from '../docMeta'
+import { stripContent, sortByUpdatedAtDesc, type DocMeta } from '../sidebar/docMeta'
 import type { DocPathKind } from '../docPath'
 import { setPref } from '../prefs'
-import { e2eeCreateErrorMessage } from '../appNotices'
+import { e2eeCreateErrorMessage } from '../notices/appNotices'
 import { fetchUsage } from '../../storage/attachmentsApi'
 import {
   readZipEntries,
@@ -39,7 +39,7 @@ import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag,
 import { toWebp } from '../../storage/toWebp'
 import { attachImages } from './attachImages'
 import { setupFileLaunch } from '../../pwa/fileLaunch'
-import type { NoticeWithAction } from '../NoticeBar'
+import type { NoticeWithAction } from '../notices/NoticeBar'
 import { leaveScreens, screenOpen, type ScreenState } from '../leaveScreens'
 import { canRemountWithFresh, shouldRemountAfterImport } from './importResult'
 import type { UseLocalFileResult } from '../localFile/useLocalFile'

@@ -1,6 +1,6 @@
 // 공유 알림 순수 함수 — 대상, 새 행 판정, 폴더 있음 (specs/features/F-2116.md 2.1). React·DOM 없음
 import type { InboxNotificationItem } from '../../lib/comments/docComments'
-import type { DocMeta } from '../docMeta'
+import type { DocMeta } from '../sidebar/docMeta'
 
 export type ShareTarget = { kind: 'doc'; docId: string } | { kind: 'folder'; folderId: string }
 

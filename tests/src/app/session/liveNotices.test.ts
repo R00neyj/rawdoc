@@ -1,7 +1,7 @@
 // 실시간 알림 띠 판정 세 가지 — U1~U15 (F-2070 7.1)
 import { describe, expect, it } from 'vitest'
 import { disconnectedNoticeMessage, isOwnServerDoc, liveStopNoticeBranch } from '../../../../src/app/session/liveNotices'
-import { LIVE_NOTICE, READ_ONLY_LIVE_NOTICE } from '../../../../src/app/appNotices'
+import { LIVE_NOTICE, READ_ONLY_LIVE_NOTICE } from '../../../../src/app/notices/appNotices'
 
 describe('isOwnServerDoc', () => {
   it('U1 서버 저장소의 내 문서(role 없음)면 참', () => {
