@@ -508,6 +508,7 @@
 .md-math-inline {
   display: inline-block;
   vertical-align: middle;
+  text-indent: 0; /* 목록 줄의 음수 text-indent 가 상속되면 수식이 앞 글자 위로 겹친다 (이슈 #5) */
 }
 
 .md-math-error {
