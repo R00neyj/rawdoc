@@ -138,7 +138,7 @@ npm run e2e:one -- e2e/site.spec.js "F-274 A9" --workers 2   # several targets a
 npm run e2e:before -- "F-246 A6" --ref 2f4099a --repeat 3   # run the same test at an earlier commit, to tell "my change broke it" from "it was already broken"
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
 npm run measure -- --touch --size 390x844 --select ".topbar-pill" --style width,height   # phone measurement; --touch is required for (pointer: coarse) values
-npm run review -- F-xxx   # check for out-of-ownership files, forbidden patterns, and specs/files.md drift when a source file changed
+npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns; warns (exit 0) when a source file changed and specs/files.md needs an update by main
 npm run files:check   # specs/files.md rows match the real source files (missing, ghost, wrong section, count, order)
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
