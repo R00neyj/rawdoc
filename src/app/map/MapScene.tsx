@@ -32,7 +32,7 @@ import { edgeColorAt } from '../../lib/map/mapEdgeStyle'
 import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_FOCUS_FADE_MS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus, stepFade } from '../../lib/map/mapFocus'
 import { MAP_FILTER_DIM, MAP_GROUP_PALETTE } from '../../lib/map/mapFilter'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
-import type { WikiGraph } from '../../lib/wikiGraph'
+import type { WikiGraph } from '../../lib/wiki/wikiGraph'
 import type { MapView } from './mapPrefs'
 
 type MapSceneProps = {

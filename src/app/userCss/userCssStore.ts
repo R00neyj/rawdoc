@@ -1,7 +1,7 @@
 // 사용자 CSS 두 슬롯 읽기·로컬 슬롯 쓰기·부팅 값 쓰기·같은 탭 변경 알림 (specs/features/F-2095.md 6장)
 import { getPref, trySetPref } from '../prefs'
 import { compileCached } from './userCssApply'
-import { USER_CSS_BOOT_KEY } from '../bootPaint'
+import { USER_CSS_BOOT_KEY } from '../boot/bootPaint'
 import {
   USER_CSS_CHECKER_VERSION,
   USER_CSS_MAX_SNIPPETS,

@@ -1,6 +1,6 @@
 // put 할 본문의 [[위키링크]] 중 내 문서 목록에서 풀리지 않는 대상 — 앱과 같은 추출·해석기를 쓴다
-import { extractWikiTargets } from '../../src/lib/wikiGraph'
-import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from '../../src/lib/wikiResolve'
+import { extractWikiTargets } from '../../src/lib/wiki/wikiGraph'
+import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from '../../src/lib/wiki/wikiResolve'
 
 // 펜스·인라인 코드·프론트매터·![[…]] 는 빼고, 별칭(|)·제목줄(#) 앞의 대상만. 같은 대상은 한 번
 export function wikiTargetsOf(content: string): string[] {

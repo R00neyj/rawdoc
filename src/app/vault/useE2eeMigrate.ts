@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { DEFAULT_DB_NAME, createIdbStore, markLocalE2eeMigrated, readE2eeRow } from '../../storage/idbStore'
 import type { ServerStore } from '../../storage/serverStore'
-import { checkLocalE2eeMigration, runLocalE2eeMigration } from '../migrateLocal'
+import { checkLocalE2eeMigration, runLocalE2eeMigration } from '../boot/migrateLocal'
 import type { LocalE2eeKeys } from '../../e2ee/convert'
 import { purgeTrashDoc } from '../trash/trashApi'
 import { lockDocMetas, planE2eeReset, type E2eeStore } from '../../e2ee/e2eeStore'

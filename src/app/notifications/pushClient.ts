@@ -2,7 +2,7 @@
 import type { PushSubscribeBody } from '../../lib/pushApi'
 import { safePushUrl } from '../../lib/pushPayload'
 import { PUSH_OPEN_MESSAGE } from '../../pwa/pushSwCore'
-import { parseHash } from '../hashRoute'
+import { parseHash } from '../routing/hashRoute'
 
 export const PUSH_SYNC_INTERVAL_MS = 604_800_000
 export const PUSH_SW_READY_TIMEOUT_MS = 10_000

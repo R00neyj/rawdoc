@@ -1,7 +1,7 @@
 // 사용자 CSS 시트 묶음·부팅 이어받기·안전 모드 주소·컴파일 캐시·조합 미룸 (specs/features/F-2095.md 4·5장)
 import { compileUserCss } from './userCssCompile'
 import type { UserCssCompiled } from '../../lib/userCss/userCssPolicy'
-import { USER_CSS_ATTR, USER_CSS_HANDOFF, USER_CSS_REV_ATTR } from '../bootPaint'
+import { USER_CSS_ATTR, USER_CSS_HANDOFF, USER_CSS_REV_ATTR } from '../boot/bootPaint'
 
 export type UserCssItem = { name: string; css: string }
 export type UserCssMode = 'on' | 'off' | 'safe'

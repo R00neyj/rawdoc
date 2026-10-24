@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
 import { buildSearchIndex, folderPathMap, type SearchIndexEntry } from '../search/searchIndex'
-import { buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, type WikiGraph } from '../../lib/wikiGraph'
+import { buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, type WikiGraph } from '../../lib/wiki/wikiGraph'
 import { parseSearchQuery } from '../../lib/search/docSearch'
 import {
   computeGroupColors,

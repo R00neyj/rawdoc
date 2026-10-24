@@ -5,7 +5,7 @@ import { planExportPaths, selectExportScope, type WorkspaceExportSourceStore, ty
 import { planVaultExport, toVaultMarkdown, exportVault, downloadVaultExport, type VaultLinkContext } from '../../../../src/app/importExport/exportVault'
 import { toObsidianFileName, toObsidianFolderName } from '../../../../src/lib/filename'
 import { fromEditorText } from '../../../../src/lib/lineEnding'
-import { createWikiResolver } from '../../../../src/lib/wikiResolve'
+import { createWikiResolver } from '../../../../src/lib/wiki/wikiResolve'
 import type { Doc, Folder } from '../../../../src/types'
 
 vi.mock('../../../../src/app/importExport/exportDoc', () => ({ downloadBlob: vi.fn() }))

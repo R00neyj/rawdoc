@@ -17,7 +17,7 @@ import {
 import { linkPushFailedMessage, PUSH_OFFLINE_MESSAGE, readPushAttachment, type PushOutcome } from './githubPush'
 import type { GithubDialogsProps, GithubPickerMode } from './GithubPickerDialog'
 import type { GithubMenuProps } from './GithubMenu'
-import { replaceAppEntry } from '../historyEntries'
+import { replaceAppEntry } from '../routing/historyEntries'
 import { sortByUpdatedAtDesc, stripContent, type DocMeta } from '../sidebar/docMeta'
 import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { PaletteContext } from '../palette/paletteContract'

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { BOOT_PAINT_SCRIPT } from '../../../src/app/bootPaint'
+import { BOOT_PAINT_SCRIPT } from '../../../src/app/boot/bootPaint'
 import { BOOT_PAINT_SHA256, buildCsp, createCspNonce, cspHeaders, cspRevisionSource, staticHeaderLines, CSP_MODE } from '../../../src/lib/cspPolicy'
 
 const TAIL = "frame-ancestors 'none'; report-uri /api/csp-report"

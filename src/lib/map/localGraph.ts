@@ -1,7 +1,7 @@
 // 지금 문서를 가운데 둔 1단계 위키링크 그래프 — 백링크·나가는 링크로 노드를 만들고 지도 장면 그래프로 바꾸거나 2차원으로 배치, 순수 함수 (small 2026-10-11)
 import type * as D3 from 'd3-force-3d'
-import type { DocLinkRow, OutgoingLinkRow } from '../docLinks'
-import type { WikiGraph } from '../wikiGraph'
+import type { DocLinkRow, OutgoingLinkRow } from '../wiki/docLinks'
+import type { WikiGraph } from '../wiki/wikiGraph'
 
 // 280px 칸에서 노드가 겹쳐 읽을 수 없게 되는 선 — 넘으면 앞에서 자르고 안내한다
 export const LOCAL_GRAPH_MAX_NEIGHBORS = 60

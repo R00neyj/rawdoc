@@ -10,7 +10,7 @@ import {
   userCssSyncMessage,
 } from '../../../../src/app/userCss/userCssSync'
 import { USER_CSS_ACCOUNT_KEY, USER_CSS_KEY, readAccountSlot, type UserCssAccountSlot } from '../../../../src/app/userCss/userCssStore'
-import { USER_CSS_BOOT_KEY } from '../../../../src/app/bootPaint'
+import { USER_CSS_BOOT_KEY } from '../../../../src/app/boot/bootPaint'
 import { USER_CSS_MAX_TOTAL_BYTES, type UserCssSnippet } from '../../../../src/lib/userCss/userCssPolicy'
 
 const id = (i: number) => i.toString(16).padStart(16, '0')

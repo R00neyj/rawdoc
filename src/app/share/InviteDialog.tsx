@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Dialog from '../Dialog'
 import { IconLink } from '../icons'
-import { formatHash } from '../hashRoute'
+import { formatHash } from '../routing/hashRoute'
 import { listGrants, putGrant, deleteGrant, type Grant, type GrantRole, type GrantTargetType } from '../../storage/docsApi'
 import type { Notice } from '../notices/notice'
 

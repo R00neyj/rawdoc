@@ -11,7 +11,7 @@ import { shareTarget, sharedFolderListed } from '../share/shareNotifications'
 import { useShareResync } from '../share/useShareResync'
 import type { Notice } from '../notices/notice'
 import { createPeopleCache } from '../comments/mentionCandidates'
-import { formatCommentHash, formatHash, parseHash } from '../hashRoute'
+import { formatCommentHash, formatHash, parseHash } from '../routing/hashRoute'
 import type { InboxNotificationItem } from '../../lib/comments/docComments'
 import type { Store } from '../../types'
 

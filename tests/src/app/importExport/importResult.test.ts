@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canRemountWithFresh, shouldRemountAfterImport, type RemountGateInput } from '../../../../src/app/importExport/importResult'
-import type { DocPathKind } from '../../../../src/app/docPath'
+import type { DocPathKind } from '../../../../src/app/document/docPath'
 
 const base: RemountGateInput = {
   openBeforeId: 'a',

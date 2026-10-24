@@ -1,4 +1,4 @@
-// ==...== 짝 찾기 (specs/features/F-283.md 3.3). 순수 함수, DOM·CM6·markdown-it 없음 — src/lib/wikiLink.ts 와 같은 자리. 편집·원문 모드 decoration(highlightMark.ts)이 이 함수를 쓴다
+// ==...== 짝 찾기 (specs/features/F-283.md 3.3). 순수 함수, DOM·CM6·markdown-it 없음 — src/lib/wiki/wikiLink.ts 와 같은 자리. 편집·원문 모드 decoration(highlightMark.ts)이 이 함수를 쓴다
 
 export type HighlightMatch = { from: number; to: number; innerFrom: number; innerTo: number }
 

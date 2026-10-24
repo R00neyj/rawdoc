@@ -17,7 +17,7 @@ import type { OutlineControl } from '../rightPanel/Outline'
 import { moreButtonVisible, type TopBarScreen } from './topBarMore'
 import type { Peer } from '../../lib/peers'
 import type { ShareDoc } from '../../lib/share/shareCodec'
-import type { WikiResolver } from '../../lib/wikiResolve'
+import type { WikiResolver } from '../../lib/wiki/wikiResolve'
 import type { Notice } from '../notices/notice'
 import type { KanbanView } from '../kanban/kanbanView'
 

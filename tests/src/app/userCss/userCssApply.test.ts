@@ -14,7 +14,7 @@ import {
   urlWithoutSafe,
   type UserCssDoc,
 } from '../../../../src/app/userCss/userCssApply'
-import { USER_CSS_ATTR, USER_CSS_HANDOFF, USER_CSS_REV_ATTR } from '../../../../src/app/bootPaint'
+import { USER_CSS_ATTR, USER_CSS_HANDOFF, USER_CSS_REV_ATTR } from '../../../../src/app/boot/bootPaint'
 
 describe('hasSafeParam', () => {
   test('질의 조각의 첫 = 앞이 정확히 safe', () => {

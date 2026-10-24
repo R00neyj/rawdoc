@@ -7,7 +7,7 @@ import { ensureSyntaxTree } from '@codemirror/language'
 import { frontmatterExtension } from '../../../../src/editor/frontmatter'
 import { buildWikiLinks, findWikiLinkAt, setWikiContextEffect, wikiContextField, type WikiContext } from '../../../../src/editor/preview/wikiLinks'
 import type { EditorState as CMState } from '@codemirror/state'
-import { createWikiResolver } from '../../../../src/lib/wikiResolve'
+import { createWikiResolver } from '../../../../src/lib/wiki/wikiResolve'
 
 function titlesContext(titles: string[]): WikiContext {
   return { resolver: createWikiResolver(titles.map((title, i) => ({ id: String(i), title, folderId: null })), []), sourceFolderId: null }

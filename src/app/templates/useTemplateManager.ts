@@ -1,7 +1,7 @@
 // 템플릿 관리 대화상자 열기·새 템플릿·편집·삭제 (small 2026-10-10)
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { templateRootFolder } from '../../lib/templates/templates'
-import type { CreateDocInput } from '../useDocNavigation'
+import type { CreateDocInput } from '../document/useDocNavigation'
 import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { Folder, Store } from '../../types'
 

@@ -7,8 +7,8 @@ import { imageBlockToEmbed } from '../../lib/obsidianImage'
 import { fromEditorText, toEditorText } from '../../lib/lineEnding'
 import { findFrontmatter, textAfterFrontmatter } from '../../lib/frontmatter'
 import { parseMarkdownTokens } from '../../viewer/renderMarkdown'
-import { scanWikiLinks } from '../../lib/wikiGraph'
-import { createWikiResolver, type WikiResolver, type WikiDocRef, type WikiFolderRef } from '../../lib/wikiResolve'
+import { scanWikiLinks } from '../../lib/wiki/wikiGraph'
+import { createWikiResolver, type WikiResolver, type WikiDocRef, type WikiFolderRef } from '../../lib/wiki/wikiResolve'
 import {
   selectExportScope,
   planExportPaths,

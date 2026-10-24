@@ -19,7 +19,7 @@ import {
   type YearMonth,
 } from '../../lib/calendar'
 import type { CalendarSettings } from '../settings/CalendarSettingsTab'
-import type { CreateDocInput } from '../useDocNavigation'
+import type { CreateDocInput } from '../document/useDocNavigation'
 import type { TemplateContentVars } from '../templates/useNewDocTemplate'
 import { displayDocTitle, type DocMeta } from '../sidebar/docMeta'
 import type { Folder } from '../../types'

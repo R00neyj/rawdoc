@@ -1,5 +1,5 @@
 // 저장소 → 위키링크 지도 인덱스, 바뀐 문서만 다시 만든다 (specs/features/F-292.md 5.3, F-284 5.3 과 같은 방식)
-import { extractWikiTargets } from '../../lib/wikiGraph'
+import { extractWikiTargets } from '../../lib/wiki/wikiGraph'
 import type { Doc, Store } from '../../types'
 
 // 폴더 목록도 읽어야 지도 필터의 `폴더` 항목을 그릴 수 있다 (F-2007 5.5)

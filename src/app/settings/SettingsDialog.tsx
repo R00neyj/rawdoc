@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from '../Dialog'
 import SettingsPageShell from './SettingsPageShell'
-import { openDonateDialog } from '../donateStore'
+import { openDonateDialog } from '../donate/donateStore'
 import { usePhoneWidth } from '../phone/usePhoneWidth'
 import { useSettingsPages } from './useSettingsPages'
 import { settingsPagesMode } from './settingsPages'

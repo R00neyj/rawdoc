@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from 'react-dom'
 import type { EditorState } from '@codemirror/state'
 import type { EditorHandle } from '../../editor/Editor'
-import DocumentArea, { type DocumentAreaProps } from '../DocumentArea'
+import DocumentArea, { type DocumentAreaProps } from '../document/DocumentArea'
 import DocTabBar from './DocTabBar'
 import SplitDividers from './SplitDividers'
 import { usePaneDropZones } from './usePaneDropZones'

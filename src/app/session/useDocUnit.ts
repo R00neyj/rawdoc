@@ -11,7 +11,7 @@ import { sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from '../sidebar/docM
 import { isDocLoading } from './docLoading'
 import { openLoadOf, saverBlocked, unitLocked, type DocUnit, type DocUnitHost } from './docUnit'
 import { useDocClaim } from './useDocClaim'
-import { useDocSaver } from '../useDocSaver'
+import { useDocSaver } from '../document/useDocSaver'
 import { useDocSession } from './useDocSession'
 import { useLiveRoomDoc } from './useLiveRoomDoc'
 import type { ClaimHub } from './useTabSync'

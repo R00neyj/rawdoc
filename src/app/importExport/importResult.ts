@@ -1,5 +1,5 @@
 // 가져오기 뒤 열린 편집기를 다시 마운트할지 — confirmImport·confirmVaultImport 가 함께 쓴다 (F-2068, F-282 3.9, F-305 10.1)
-import type { DocPathKind } from '../docPath'
+import type { DocPathKind } from '../document/docPath'
 
 export type RemountGateInput = {
   openBeforeId: string

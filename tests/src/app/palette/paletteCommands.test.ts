@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTE_COMMANDS, recentFileCommands } from '../../../../src/app/palette/paletteCommands'
-import { EDITOR_COMMANDS } from '../../../../src/app/contextMenuItems'
+import { EDITOR_COMMANDS } from '../../../../src/app/contextMenu/contextMenuItems'
 import { filterPaletteItems } from '../../../../src/app/palette/paletteContract'
 import type { PaletteContext } from '../../../../src/app/palette/paletteContract'
 import type { TemplateEntry } from '../../../../src/lib/templates/templates'

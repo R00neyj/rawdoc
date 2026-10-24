@@ -1,6 +1,6 @@
 // 댓글 레일·판 순수 함수 — 권한·정렬·판정·시각. DOM·React 없음 (specs/features/F-505.md 3.1)
 import type { CommentActor, CommentAuthor } from '../../lib/comments/docComments'
-import type { DocPathKind } from '../docPath'
+import type { DocPathKind } from '../document/docPath'
 import type { LivePhase } from '../session/liveDoc'
 
 export const COMMENT_RAIL_WIDTH = 280 // px (F-500 4.3)

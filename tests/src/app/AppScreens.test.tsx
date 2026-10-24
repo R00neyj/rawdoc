@@ -5,7 +5,7 @@ import SharedView from '../../../src/app/share/SharedView'
 import SharesPage from '../../../src/app/share/SharesPage'
 import HelpPage from '../../../src/app/help/HelpPage'
 import TrashPage from '../../../src/app/trash/TrashPage'
-import EmptyState from '../../../src/app/EmptyState'
+import EmptyState from '../../../src/app/document/EmptyState'
 
 // jsdom 없이 컴포넌트 함수를 직접 불러 엘리먼트 트리를 훑는다 (F-2081 6장)
 type El = { type: unknown; props: Record<string, unknown> & { children?: unknown } }

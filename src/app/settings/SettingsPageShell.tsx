@@ -2,7 +2,7 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { IconArrowBack, IconChevron, IconClose } from '../icons'
 import { WELCOME_PATH } from '../../lib/siteChrome'
-import { openDonateDialog } from '../donateStore'
+import { openDonateDialog } from '../donate/donateStore'
 import type { SettingsPage } from './settingsPages'
 import { groupSettingsTabs, settingsTabGroupLabel, type SettingsTabId } from './settingsTabs'
 

@@ -12,7 +12,7 @@ import {
 import { checkSealPublicKey, sealToken, sealTokenV2 } from '../../lib/account/cliSeal'
 import { createToken } from '../../storage/apiTokensApi'
 import { fetchAccount, loginUrl } from './account'
-import { removeBootSkeleton } from '../bootPaint'
+import { removeBootSkeleton } from '../boot/bootPaint'
 
 type PageState =
   | { kind: 'checking' }

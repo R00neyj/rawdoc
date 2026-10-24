@@ -1,6 +1,6 @@
 // 휴대폰 폭 설정 1·2뎁스 — 페이지 상태·기록 쓰기·popstate·cancel (specs/features/F-2114.md 2.3~2.5)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { pushAppEntry } from '../historyEntries'
+import { pushAppEntry } from '../routing/historyEntries'
 import { readNavIdx } from '../phone/phoneNavRules'
 import { decideSettingsPop, readSettingsPage, settingsPageDepth, type SettingsPage } from './settingsPages'
 import type { SettingsTabId } from './settingsTabs'

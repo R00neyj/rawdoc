@@ -7,7 +7,7 @@ import { filterPaletteDocs, PALETTE_DOC_LIMIT, type PaletteDocIndex } from './pa
 import { PALETTE_RECENT_COMMAND_LIMIT } from './paletteMemory'
 import type { ThemePref } from '../appearance/theme'
 import type { StateCommand } from '@codemirror/state'
-import type { EditorCommandGates } from '../contextMenuItems'
+import type { EditorCommandGates } from '../contextMenu/contextMenuItems'
 
 // 목록 한 줄 — 명령이든 2단계 항목(템플릿)이든 같은 모양 (3.1)
 export type PaletteItem = {

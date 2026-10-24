@@ -2,7 +2,7 @@
 import { prepareMatchText, splitMatchTerms, matchTerm, type MatchText } from '../../lib/search/hangulMatch'
 import { E2EE_MAX_PLAIN_TITLE_CHARS } from '../../lib/vault/e2eeLimits'
 import type { PaletteDoc, PaletteCreatePlan } from './paletteContract'
-import type { WikiResolver } from '../../lib/wikiResolve'
+import type { WikiResolver } from '../../lib/wiki/wikiResolve'
 
 export const PALETTE_DOC_LIMIT = 6
 export const PALETTE_RECENT_DOC_LIMIT = 5

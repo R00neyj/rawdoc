@@ -3,7 +3,7 @@ import Dialog from '../Dialog'
 import { IconOpenInNew, IconPersonAdd, IconTooltip } from '../icons'
 import { cancelAccessRequest, fetchAccessStatus, sendAccessRequest } from './accessRequestApi'
 import { accessControlView, accessRequestErrorMessage, formatLocalDate } from './accessRequestView'
-import { formatHash } from '../hashRoute'
+import { formatHash } from '../routing/hashRoute'
 import type { AccessRequestStatus, AccessRole } from '../../lib/share/accessRequest'
 
 export type AccessRequestControlProps = {

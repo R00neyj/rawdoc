@@ -1,5 +1,5 @@
 // 할 일 — 옵시디언 Tasks 플러그인의 전역 필터·상태·이모지 형식·happens·기본 정렬을 따른 읽기 전용 모음, 순수 함수 (small 2026-10-11)
-import { proseLines } from './wikiGraph'
+import { proseLines } from './wiki/wikiGraph'
 import { isKanbanDoc, kanbanDoneLane, parseKanban } from './kanban/kanban'
 import { toEditorText } from './lineEnding'
 

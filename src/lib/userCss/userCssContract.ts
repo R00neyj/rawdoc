@@ -78,7 +78,7 @@ export const PUBLIC_VARS: readonly PublicVar[] = [
 ]
 
 const MENU_FILES = [
-  'src/app/ContextMenu.tsx',
+  'src/app/contextMenu/ContextMenu.tsx',
   'src/app/account/AccountMenu.tsx',
   'src/app/topbar/EditorToolbar.tsx',
   'src/app/importExport/ExportMenu.tsx',
@@ -95,7 +95,7 @@ export const CHROME_HOOKS: readonly ChromeHook[] = [
   { value: 'sidebar-list', label: '사이드바 문서·폴더 목록 — 접힌 레일에서는 없습니다', files: ['src/app/sidebar/Sidebar.tsx'] },
   { value: 'topbar', label: '위 막대', files: ['src/app/topbar/TopBar.tsx'] },
   { value: 'statusbar', label: '아래 상태 막대', files: ['src/app/topbar/StatusBar.tsx'] },
-  { value: 'content', label: '문서 영역 — data-view-mode 가 live·raw·view', files: ['src/app/DocumentArea.tsx'] },
+  { value: 'content', label: '문서 영역 — data-view-mode 가 live·raw·view', files: ['src/app/document/DocumentArea.tsx'] },
   {
     value: 'doc-title',
     label: '문서 제목 — 편집·보기·인쇄',
@@ -109,7 +109,7 @@ export const CHROME_HOOKS: readonly ChromeHook[] = [
   { value: 'dialog', label: '대화상자 — 설정·팔레트·검색 포함', files: ['src/app/Dialog.tsx'] },
   { value: 'menu', label: '메뉴 — 우클릭·드롭다운', files: MENU_FILES },
   { value: 'notice', label: '알림 띠', files: ['src/app/notices/NoticeBar.tsx'] },
-  { value: 'home', label: '홈 화면', files: ['src/app/EmptyState.tsx'] },
+  { value: 'home', label: '홈 화면', files: ['src/app/document/EmptyState.tsx'] },
   { value: 'map', label: '지도 화면 — 캔버스 안은 CSS 가 닿지 않습니다', files: ['src/app/map/MapPage.tsx'] },
 ]
 

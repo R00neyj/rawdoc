@@ -1,0 +1,144 @@
+import { describe, expect, it, vi } from 'vitest'
+import EmptyState from '../../../../src/app/document/EmptyState'
+
+// jsdom 없이(새 의존성 없음) 컴포넌트 함수를 직접 호출해 나온 엘리먼트 트리를 순회해 onClick 까지 검증한다
+type Node = { type: unknown; props?: { className?: unknown; children?: unknown; onClick?: (e?: { preventDefault: () => void }) => void } } | null | undefined | boolean | string | number
+
+function collect(node: Node | Node[], className: string, out: Extract<Node, object>[] = []) {
+  if (node == null || typeof node === 'boolean') return out
+  if (Array.isArray(node)) {
+    node.forEach((n) => collect(n as Node, className, out))
+    return out
+  }
+  if (typeof node !== 'object') return out
+  if (node.props?.className === className) out.push(node)
+  if (node.props?.children !== undefined) collect(node.props.children as Node, className, out)
+  return out
+}
+
+const baseProps = {
+  hasDocs: true,
+  onCreateDoc: () => {},
+  onImportDoc: () => {},
+  onSelectDoc: () => {},
+  onOpenHelp: () => {},
+}
+
+function makeDocs(n: number) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `doc-${i}`,
+    title: `문서 ${i}`,
+    updatedAt: 1_700_000_000_000 + i,
+  }))
+}
+
+describe('F-241 A1 5개 자르기', () => {
+  it('문서 8개를 넘겨도 항목은 5개만 렌더한다', () => {
+    const tree = EmptyState({ ...baseProps, recentDocs: makeDocs(8) })
+    expect(collect(tree, 'empty-state-recent-item')).toHaveLength(5)
+  })
+})
+
+describe('F-241 A2 빈 목록', () => {
+  it('문서 0개면 머리글도 목록도 렌더하지 않는다', () => {
+    const tree = EmptyState({ ...baseProps, recentDocs: [] })
+    expect(collect(tree, 'empty-state-recent-heading')).toHaveLength(0)
+    expect(collect(tree, 'empty-state-recent')).toHaveLength(0)
+    expect(collect(tree, 'empty-state-recent-item')).toHaveLength(0)
+  })
+})
+
+describe('F-241 A3 클릭', () => {
+  it('항목을 누르면 onSelectDoc 이 그 문서 id 로 불린다', () => {
+    const onSelectDoc = vi.fn()
+    const docs = makeDocs(3)
+    const tree = EmptyState({ ...baseProps, recentDocs: docs, onSelectDoc })
+    const items = collect(tree, 'empty-state-recent-item')
+    expect(items).toHaveLength(3)
+
+    items[1].props?.onClick?.({ preventDefault: () => {} })
+
+    expect(onSelectDoc).toHaveBeenCalledTimes(1)
+    expect(onSelectDoc).toHaveBeenCalledWith('doc-1')
+  })
+})
+
+describe('F-4003 U9 최근 문서 제목 규칙', () => {
+  it('제목은 displayDocTitle 규칙 — 빈 제목은 제목 없는 문서', () => {
+    const docs = [
+      { id: 'c', title: '일반 문서', updatedAt: 3 },
+      { id: 'd', title: '', updatedAt: 4 },
+    ]
+    const tree = EmptyState({ ...baseProps, recentDocs: docs })
+    const titles = collect(tree, 'empty-state-recent-title').map((n) => n.props?.children)
+    expect(titles).toEqual(['일반 문서', '제목 없는 문서'])
+  })
+})
+
+describe('F-257 G12 도움말 줄', () => {
+  it('누르면 onOpenHelp 가 불린다', () => {
+    const onOpenHelp = vi.fn()
+    const tree = EmptyState({ ...baseProps, recentDocs: [], onOpenHelp })
+    const items = collect(tree, 'empty-state-help')
+    expect(items).toHaveLength(1)
+
+    items[0].props?.onClick?.()
+
+    expect(onOpenHelp).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('F-2155 U8 파일 열기…', () => {
+  // .empty-state-actions 단추의 글자들 — 아이콘 엘리먼트는 건너뛴다
+  function actionLabels(tree: Node) {
+    const [actions] = collect(tree, 'empty-state-actions')
+    const buttons = ([] as Node[]).concat(actions.props?.children as Node[]).filter((n): n is Extract<Node, object> => Boolean(n) && typeof n === 'object')
+    return buttons.map((b) => ({ label: ([] as unknown[]).concat(b.props?.children).filter((c) => typeof c === 'string').join('').trim(), onClick: b.props?.onClick }))
+  }
+
+  it('onOpenLocalFile 이 없으면 단추가 없다', () => {
+    expect(actionLabels(EmptyState({ ...baseProps, recentDocs: [] })).map((b) => b.label)).toEqual(['새 문서', '가져오기'])
+  })
+
+  it('있으면 가져오기 뒤에 파일 열기…, 누르면 부른다', () => {
+    const onOpenLocalFile = vi.fn()
+    const labels = actionLabels(EmptyState({ ...baseProps, recentDocs: [], onOpenLocalFile }))
+    expect(labels.map((b) => b.label)).toEqual(['새 문서', '가져오기', '내 기기 파일 바로 고치기…'])
+    labels[2].onClick?.()
+    expect(onOpenLocalFile).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('F-2158 U3 최근 파일 절', () => {
+  const files = [
+    { id: 'f1', name: '메모.md', openedAt: new Date(2026, 9, 21).getTime() },
+    { id: 'f2', name: '노트.md', openedAt: new Date(2026, 9, 20).getTime() },
+  ]
+  const handlers = { onOpenRecentFile: vi.fn(), onRemoveRecentFile: vi.fn() }
+
+  it('목록이 비었거나 핸들러가 없으면 절이 없다', () => {
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: [], ...handlers }), 'empty-state-files')).toHaveLength(0)
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: files }), 'empty-state-files')).toHaveLength(0)
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: files, onOpenRecentFile: handlers.onOpenRecentFile }), 'empty-state-files')).toHaveLength(0)
+  })
+
+  it('최근 문서 뒤에 이름·날짜가 나온다', () => {
+    const docs = [{ id: 'd1', title: '문서', updatedAt: 1 }]
+    const tree = EmptyState({ ...baseProps, recentDocs: docs, recentFiles: files, ...handlers })
+    expect(collect(tree, 'empty-state-files')).toHaveLength(1)
+    const [filesSection] = collect(tree, 'empty-state-files')
+    expect(collect(filesSection, 'empty-state-recent-title').map((n) => n.props?.children)).toEqual(['메모.md', '노트.md'])
+    expect(collect(filesSection, 'empty-state-recent-date').map((n) => n.props?.children)).toEqual(['2026-10-21', '2026-10-20'])
+    expect(collect(tree, 'empty-state-recent-heading').map((n) => n.props?.children)).toEqual(['최근 문서', '최근 파일'])
+  })
+
+  it('행 클릭은 열기, 목록에서 빼기는 빼기를 그 id 로 부른다', () => {
+    const onOpenRecentFile = vi.fn()
+    const onRemoveRecentFile = vi.fn()
+    const tree = EmptyState({ ...baseProps, recentDocs: [], recentFiles: files, onOpenRecentFile, onRemoveRecentFile })
+    collect(tree, 'empty-state-recent-item')[1].props?.onClick?.()
+    collect(tree, 'empty-state-file-remove')[0].props?.onClick?.()
+    expect(onOpenRecentFile).toHaveBeenCalledWith('f2')
+    expect(onRemoveRecentFile).toHaveBeenCalledWith('f1')
+  })
+})

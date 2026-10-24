@@ -6,10 +6,10 @@ import type { CommentRecord } from '../../lib/comments/docComments'
 import type { Peer } from '../../lib/peers'
 import type { Doc, LineEnding } from '../../types'
 import type { DocMeta, OpenDoc } from '../sidebar/docMeta'
-import type { DocPathKind } from '../docPath'
+import type { DocPathKind } from '../document/docPath'
 import type { LiveSnapshot } from './liveDoc'
 import type { DocSession } from './useDocSession'
-import type { useDocSaver } from '../useDocSaver'
+import type { useDocSaver } from '../document/useDocSaver'
 import type { LiveDocSession } from './useLiveDoc'
 
 export const MAX_DOC_UNITS = 4 // = F-2162 MAX_PANES. 서로 import 하지 않는다

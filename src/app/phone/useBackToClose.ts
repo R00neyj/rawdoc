@@ -1,6 +1,6 @@
 // 겹침 패널을 열 때 기록 표지 하나를 쌓아 뒤로 가기로 닫는다 — 다른 방법으로 닫으면 표지를 걷는다
 import { useEffect, useRef } from 'react'
-import { pushAppEntry, readOverlayMark } from '../historyEntries'
+import { pushAppEntry, readOverlayMark } from '../routing/historyEntries'
 
 export function useBackToClose(key: string, active: boolean, onClose: () => void) {
   const onCloseRef = useRef(onClose)

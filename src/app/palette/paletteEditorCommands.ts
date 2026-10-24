@@ -1,5 +1,5 @@
 // 서식·단락·삽입 팔레트 명령 — 우클릭 메뉴 목록(EDITOR_COMMANDS)에서 파생, 순수 (specs/features/F-2055.md 3.3)
-import { EDITOR_COMMANDS, isEditorCommandDisabled, type EditorCommandGroup } from '../contextMenuItems'
+import { EDITOR_COMMANDS, isEditorCommandDisabled, type EditorCommandGroup } from '../contextMenu/contextMenuItems'
 import type { PaletteActionCommand } from './paletteContract'
 
 // 링크 둘은 메뉴에서 맨 위 낱개지만 팔레트에서는 삽입 묶음으로 보인다 (5.1)

@@ -11,7 +11,7 @@ import ApiTokensDialog from './ApiTokensDialog'
 import type { Notice } from '../notices/notice'
 import type { MenuAction } from '../share/ShareMenu'
 import { usageGaugeRows } from '../../lib/account/usageGauge'
-import { openDonateDialog } from '../donateStore'
+import { openDonateDialog } from '../donate/donateStore'
 
 type AccountMenuAction = MenuAction & { hint?: string }
 

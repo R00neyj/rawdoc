@@ -2,7 +2,7 @@
 import type { RefObject } from 'react'
 import type { SyncState } from '../../types'
 import { IconShortcuts } from '../icons'
-import { SHORTCUT_CATALOG, formatChord } from '../shortcutCatalog'
+import { SHORTCUT_CATALOG, formatChord } from '../shortcuts/shortcutCatalog'
 
 // 판 밖에서는 맥에서도 Ctrl+… 로 적는다(F-2052 결정 8) — formatChord(..., false)
 const SHORTCUTS_HINT = formatChord(SHORTCUT_CATALOG.find((e) => e.id === 'nav.shortcuts')!.keys[0], false)

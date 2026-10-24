@@ -9,7 +9,7 @@ import type { SyntaxNode } from '@lezer/common'
 import { activeLines, isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
 import { parseCalloutHeader } from '../../lib/callout'
-import { findWikiLinks } from '../../lib/wikiLink'
+import { findWikiLinks } from '../../lib/wiki/wikiLink'
 
 // 마커를 화면에서만 지운다
 const HIDE = Decoration.replace({})

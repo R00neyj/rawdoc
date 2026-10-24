@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react'
 
 import type { ShareDoc } from '../../lib/share/shareCodec'
-import { findWikiLinks } from '../../lib/wikiLink'
-import type { WikiResolver } from '../../lib/wikiResolve'
+import { findWikiLinks } from '../../lib/wiki/wikiLink'
+import type { WikiResolver } from '../../lib/wiki/wikiResolve'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import { fetchRequestToken } from './requestToken'

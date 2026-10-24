@@ -1,6 +1,6 @@
 // 위키링크를 따라 함께 공유할 문서를 너비 우선으로 모은다. D1 을 모르는 순수 함수 (specs/features/F-252.md 2.2, F-2018 10장)
-import { findWikiLinks, maskEscapedPipes } from '../src/lib/wikiLink'
-import { createWikiResolver, type WikiDocRef, type WikiFolderRef, type WikiResolver } from '../src/lib/wikiResolve'
+import { findWikiLinks, maskEscapedPipes } from '../src/lib/wiki/wikiLink'
+import { createWikiResolver, type WikiDocRef, type WikiFolderRef, type WikiResolver } from '../src/lib/wiki/wikiResolve'
 
 export type SetNode = { id: string; title: string; depth: number; parentId: string | null }
 export type LoadDoc = (id: string) => { id: string; title: string; content: string } | null

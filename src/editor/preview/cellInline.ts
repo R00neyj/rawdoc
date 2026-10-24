@@ -2,7 +2,7 @@
 import { markdownLanguage } from '@codemirror/lang-markdown'
 import type { MarkdownParser } from '@lezer/markdown'
 
-import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from '../../lib/wikiLink'
+import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from '../../lib/wiki/wikiLink'
 import { cjkEmphasis } from '../cjkEmphasis'
 
 // markdownLanguage.parser 는 공개 타입(LRParser)으로 좁혀지지만 실제로는 항상 MarkdownParser 인스턴스다(@codemirror/lang-markdown 구현) — nodeSet·parseInline 접근에 필요

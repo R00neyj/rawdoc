@@ -1,12 +1,12 @@
 // 오른쪽 패널 `링크`·`할 일` 보기 — 보일 때만 목록을 한 번 읽어 둘이 나눠 쓴다. 지금 문서는 편집기 본문 기준 (small 2026-10-11)
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../../lib/docLinks'
+import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../../lib/wiki/docLinks'
 import { findOpenTodos, groupTasks, scanTodoSources, type TaskBucket, type TaskFilter, type TaskRow } from '../../lib/docTodos'
 import { buildLocalGraph, type LocalGraph } from '../../lib/map/localGraph'
-import type { WikiResolver } from '../../lib/wikiResolve'
+import type { WikiResolver } from '../../lib/wiki/wikiResolve'
 import type { EditorHandle } from '../../editor/Editor'
 import type { DocMeta } from '../sidebar/docMeta'
-import type { PendingJump } from '../useEditorSync'
+import type { PendingJump } from '../document/useEditorSync'
 import type { Doc, Folder } from '../../types'
 
 // 다른 문서의 저장·동기화가 몰려 와도 목록 읽기는 한 번만

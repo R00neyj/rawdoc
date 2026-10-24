@@ -15,7 +15,7 @@ import {
   writeUserCssBoot,
   type UserCssSources,
 } from '../../../../src/app/userCss/userCssStore'
-import { USER_CSS_BOOT_KEY } from '../../../../src/app/bootPaint'
+import { USER_CSS_BOOT_KEY } from '../../../../src/app/boot/bootPaint'
 import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_TOTAL_BYTES, buildUserCssBoot, type UserCssSnippet } from '../../../../src/lib/userCss/userCssPolicy'
 
 let store: Map<string, string>

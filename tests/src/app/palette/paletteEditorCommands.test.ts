@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StateCommand } from '@codemirror/state'
 
-import { EDITOR_COMMANDS, type EditorCommandGates } from '../../../../src/app/contextMenuItems'
+import { EDITOR_COMMANDS, type EditorCommandGates } from '../../../../src/app/contextMenu/contextMenuItems'
 import { EDITOR_PALETTE_COMMANDS } from '../../../../src/app/palette/paletteEditorCommands'
 import { filterPaletteItems, visibleCommands, type PaletteContext } from '../../../../src/app/palette/paletteContract'
 import { insertTable } from '../../../../src/editor/insertCommands'

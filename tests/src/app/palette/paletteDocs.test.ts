@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toPaletteDocs, prepareDocIndex, filterPaletteDocs, planPaletteCreate, PALETTE_DOC_LIMIT, type PaletteDocSource } from '../../../../src/app/palette/paletteDocs'
 import { folderPathMap } from '../../../../src/app/search/searchIndex'
-import { createWikiResolver } from '../../../../src/lib/wikiResolve'
+import { createWikiResolver } from '../../../../src/lib/wiki/wikiResolve'
 import type { Folder } from '../../../../src/types'
 
 // U5 (F-2053.md 11.1)

@@ -7,7 +7,7 @@ import { ensureSyntaxTree } from '@codemirror/language'
 import { CompletionContext } from '@codemirror/autocomplete'
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
 import { wikiContextField, type WikiContext } from '../../../src/editor/preview/wikiLinks'
-import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from '../../../src/lib/wikiResolve'
+import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from '../../../src/lib/wiki/wikiResolve'
 import { wikiCompletionSource } from '../../../src/editor/wikiComplete'
 
 function makeState(doc: string, { anchor, titles = ['사용법'], context }: { anchor?: number; titles?: string[]; context?: WikiContext } = {}) {

@@ -4,7 +4,7 @@ import { autocompletion } from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 
-import { shortestWikiTarget, type WikiDocRef, type WikiResolver } from '../lib/wikiResolve'
+import { shortestWikiTarget, type WikiDocRef, type WikiResolver } from '../lib/wiki/wikiResolve'
 import { isOpaquePosition, wikiContextField } from './preview/wikiLinks'
 
 // [[ 뒤부터 커서까지, 대괄호·파이프·줄바꿈이 없는 구간에서만 띄운다(F-131 3.1 "| 를 친 뒤에는 띄우지 않는다" — 이 문자 클래스가 자연히 그 조건을 만족)

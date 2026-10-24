@@ -6,7 +6,7 @@ import type { StateBlock, StateCore, StateInline, Delimiter, Token, RendererRule
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout'
 import { calloutIconSvg } from '../lib/calloutIcons'
-import { findWikiLinks } from '../lib/wikiLink'
+import { findWikiLinks } from '../lib/wiki/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'

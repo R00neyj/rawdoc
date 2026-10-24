@@ -1,5 +1,5 @@
 // 다른 탭 신호로 목록을 다시 읽을 때 병합 — 요청 전 스냅샷에 있던 것만 지운다(mergeBootList, F-2042 4.3, 리뷰 A3), 공유 목록을 못 읽은 회차엔 지우지 않는다(빈 목록이 실패인지 0개인지는 저장소만 안다)
-import { mergeBootList } from '../bootList'
+import { mergeBootList } from '../boot/bootList'
 
 type ResyncMeta = { id: string; updatedAt: number; role?: 'owner' | 'edit' | 'view' }
 

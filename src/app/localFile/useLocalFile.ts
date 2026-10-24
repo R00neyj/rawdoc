@@ -6,8 +6,8 @@ import { ensureWritePermission, MD_PICKER_OPTIONS } from '../../lib/fileSystemAc
 import type { EditorHandle } from '../../editor/Editor'
 import type { LineEnding } from '../../types'
 import type { NoticeWithAction } from '../notices/NoticeBar'
-import { leaveScreens, type ScreenSetters } from '../leaveScreens'
-import { pushFileHash } from '../useHashRouting'
+import { leaveScreens, type ScreenSetters } from '../routing/leaveScreens'
+import { pushFileHash } from '../routing/useHashRouting'
 import { downloadBlob } from '../importExport/exportDoc'
 import {
   hasUnwritten,
