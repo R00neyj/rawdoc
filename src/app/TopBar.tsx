@@ -19,7 +19,7 @@ import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
-import type { KanbanView } from './kanbanView'
+import type { KanbanView } from './kanban/kanbanView'
 
 const KANBAN_VIEWS: { value: KanbanView; label: string; Icon: typeof IconKanban }[] = [
   { value: 'board', label: '보드 — 칸반 보드로 보기', Icon: IconKanban },

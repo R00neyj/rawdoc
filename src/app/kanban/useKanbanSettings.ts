@@ -1,7 +1,7 @@
 // 설정 `칸반` 탭 — 지금 연 칸반 문서의 완료 칸을 읽고, 쓰기는 applyKanban 한 길 (small 2026-10-14)
 import { useEffect, useMemo, useState } from 'react'
-import { kanbanDoneChange, kanbanDoneChoices, type KanbanDoneChoices } from '../lib/kanban'
-import type { EditorHandle } from '../editor/Editor'
+import { kanbanDoneChange, kanbanDoneChoices, type KanbanDoneChoices } from '../../lib/kanban/kanban'
+import type { EditorHandle } from '../../editor/Editor'
 import type { ApplyKanban } from './useKanbanView'
 
 export type KanbanSettings = {

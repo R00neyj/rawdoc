@@ -1,5 +1,5 @@
 // 칸반 원문 읽기와 변경 함수 — 순수 함수, LF 원문만 받고 위치는 CM6 위치와 같다 (specs/features/F-2139.md)
-import { findFrontmatter, frontmatterValueText } from './frontmatter'
+import { findFrontmatter, frontmatterValueText } from '../frontmatter'
 
 export const KANBAN_NEW_DOC_TEXT = '---\nkanban: true\n---\n# 제목 없는 보드\n\n## 할 일\n\n## 진행 중\n\n## 완료'
 export const NEW_LANE_TITLE = '새 칸'

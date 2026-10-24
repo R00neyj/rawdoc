@@ -1,9 +1,9 @@
 // 설정 `칸반` — 카드·완료 카드 둘, 새 카드 체크 칸(기기별)과 지금 연 보드의 완료 칸(원문 `kanban-done`) (small 2026-10-14)
 import { useState } from 'react'
-import { getPref, setPref } from './prefs'
+import { getPref, setPref } from '../prefs'
 import type { KanbanSettings } from './useKanbanSettings'
-import { truncateChars } from '../lib/truncate'
-import SettingsCard from './SettingsCard'
+import { truncateChars } from '../../lib/truncate'
+import SettingsCard from '../SettingsCard'
 
 // 네이티브 목록은 가장 긴 항목만큼 넓어진다 (tweak 2026-10-15)
 const LANE_OPTION_MAX_CHARS = 30

@@ -23,7 +23,7 @@ import { topBarScreen } from './topBarMore'
 import PhoneNav from './PhoneNav'
 import type { DocTabBarProps } from './useDocTabs'
 import type { GithubMenuProps } from './GithubMenu'
-import type { UseKanbanViewResult } from './useKanbanView'
+import type { UseKanbanViewResult } from './kanban/useKanbanView'
 
 // 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
 const NO_PEERS: Peer[] = []

@@ -1,6 +1,6 @@
 // 할 일 — 옵시디언 Tasks 플러그인의 전역 필터·상태·이모지 형식·happens·기본 정렬을 따른 읽기 전용 모음, 순수 함수 (small 2026-10-11)
 import { proseLines } from './wikiGraph'
-import { isKanbanDoc, kanbanDoneLane, parseKanban } from './kanban'
+import { isKanbanDoc, kanbanDoneLane, parseKanban } from './kanban/kanban'
 import { toEditorText } from './lineEnding'
 
 // 패널 목록이 끝없이 길어지지 않게 — 넘으면 정렬한 뒤 앞에서 자르고 안내한다

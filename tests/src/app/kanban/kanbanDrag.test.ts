@@ -1,6 +1,6 @@
 // 칸반 카드 끌기 판정 순수 함수 (specs/features/F-2142.md 2장, U1~U3)
 import { describe, expect, it } from 'vitest'
-import { KANBAN_EDGE_PX, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, moveTarget, neighborCard, pickupState } from '../../../src/app/kanbanDrag'
+import { KANBAN_EDGE_PX, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, moveTarget, neighborCard, pickupState } from '../../../../src/app/kanban/kanbanDrag'
 
 describe('F-2142 U1 pickupState', () => {
   it('마우스는 4px 움직이면 집는다', () => {

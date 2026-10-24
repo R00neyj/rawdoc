@@ -15,7 +15,7 @@ import {
   type TemplateEntry,
 } from '../../../src/lib/templates'
 import { BUILTIN_TEMPLATES } from '../../../src/lib/builtinTemplates'
-import { isKanbanDoc } from '../../../src/lib/kanban'
+import { isKanbanDoc } from '../../../src/lib/kanban/kanban'
 import type { FolderLike } from '../../../src/lib/folderTree'
 
 describe('isTemplateFolderName — 4.2', () => {

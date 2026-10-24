@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardImageView, inlineImageInsert, takeCardImages } from '../../../src/lib/kanbanImages'
+import { cardImageView, inlineImageInsert, takeCardImages } from '../../../../src/lib/kanban/kanbanImages'
 
 const A = 'attachments/0123456789abcdef.webp'
 const B = 'attachments/fedcba9876543210.png'

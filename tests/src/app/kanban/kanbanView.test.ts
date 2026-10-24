@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextKanbanView } from '../../../src/app/kanbanView'
+import { nextKanbanView } from '../../../../src/app/kanban/kanbanView'
 
 describe('F-2140 U1 nextKanbanView', () => {
   it('open — 칸반 문서는 늘 보드, 아니면 원문 (이전 보기와 무관)', () => {

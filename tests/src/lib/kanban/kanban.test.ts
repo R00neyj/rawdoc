@@ -23,8 +23,8 @@ import {
   toggleCheckChange,
   removeCheckChange,
   type KanbanChange,
-} from '../../../src/lib/kanban'
-import { fromEditorText, toEditorText } from '../../../src/lib/lineEnding'
+} from '../../../../src/lib/kanban/kanban'
+import { fromEditorText, toEditorText } from '../../../../src/lib/lineEnding'
 
 const apply = (text: string, changes: KanbanChange | KanbanChange[] | null): string => {
   if (!changes) throw new Error('null change')

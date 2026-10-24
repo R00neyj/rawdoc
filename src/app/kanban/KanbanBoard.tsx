@@ -3,25 +3,25 @@ import {
   Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
   type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react'
-import type { EditorHandle } from '../editor/Editor'
-import type { WikiContext } from '../editor/preview/wikiLinks'
-import { renderMarkdownInline } from '../viewer/renderMarkdown'
-import type { ResolveAttachment } from '../viewer/fillMarkdownAssets'
-import type { OnImageFiles } from '../editor/imageInsert'
-import { cardImageView } from '../lib/kanbanImages'
-import { setBoardComposing } from '../editor/boardComposition'
-import { redoLocal, undoLocal } from '../editor/yBinding'
+import type { EditorHandle } from '../../editor/Editor'
+import type { WikiContext } from '../../editor/preview/wikiLinks'
+import { renderMarkdownInline } from '../../viewer/renderMarkdown'
+import type { ResolveAttachment } from '../../viewer/fillMarkdownAssets'
+import type { OnImageFiles } from '../../editor/imageInsert'
+import { cardImageView } from '../../lib/kanban/kanbanImages'
+import { setBoardComposing } from '../../editor/boardComposition'
+import { redoLocal, undoLocal } from '../../editor/yBinding'
 import {
   NEW_LANE_TITLE, addCardChange, addLaneChange, cardDraft, editCardChange, kanbanDetailLines, moveCardChanges, moveLaneChanges, parseKanban, removeCardChange, removeLaneChange,
   removeCheckChange, renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
-} from '../lib/kanban'
-import { IconMore } from './icons'
-import { getPref } from './prefs'
+} from '../../lib/kanban/kanban'
+import { IconMore } from '../icons'
+import { getPref } from '../prefs'
 import {
   KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
 } from './kanbanDrag'
 import KanbanMenu, { type KanbanMenuActions, type KanbanMenuState, type KanbanMenuTarget } from './KanbanMenu'
-import type { NoticeWithAction } from './NoticeBar'
+import type { NoticeWithAction } from '../NoticeBar'
 import BoardInput from './BoardInput'
 import KanbanCardImages from './KanbanCardImages'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'

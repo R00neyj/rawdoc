@@ -1,8 +1,8 @@
 // 칸반 카드 아래 첨부 이미지 썸네일 한 줄 — 3장까지, 넘치면 +N (small 2026-10-24)
 import { useEffect, useRef } from 'react'
-import type { CardImage } from '../lib/kanbanImages'
-import { revokeAttachmentUrl } from '../lib/attachmentUrls'
-import { fillAttachmentImages, type ResolveAttachment } from '../viewer/fillMarkdownAssets'
+import type { CardImage } from '../../lib/kanban/kanbanImages'
+import { revokeAttachmentUrl } from '../../lib/attachmentUrls'
+import { fillAttachmentImages, type ResolveAttachment } from '../../viewer/fillMarkdownAssets'
 
 const MAX_THUMBS = 3
 

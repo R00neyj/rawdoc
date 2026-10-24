@@ -7,11 +7,11 @@ import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/v
 import { history, historyKeymap, indentLess, indentMore } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 
-import { autoPair } from '../editor/autoPair'
-import { wikiContextField, type WikiContext } from '../editor/preview/wikiLinks'
-import { wikiComplete } from '../editor/wikiComplete'
-import { isImageFile, type OnImageFiles } from '../editor/imageInsert'
-import { inlineImageInsert } from '../lib/kanbanImages'
+import { autoPair } from '../../editor/autoPair'
+import { wikiContextField, type WikiContext } from '../../editor/preview/wikiLinks'
+import { wikiComplete } from '../../editor/wikiComplete'
+import { isImageFile, type OnImageFiles } from '../../editor/imageInsert'
+import { inlineImageInsert } from '../../lib/kanban/kanbanImages'
 
 type BoardInputProps = {
   className: string

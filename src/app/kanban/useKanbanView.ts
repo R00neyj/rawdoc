@@ -2,9 +2,9 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { MapMode, type ChangeDesc } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
-import { isKanbanDoc, kanbanFlagChange, parseKanban, type KanbanChange, type KanbanLane } from '../lib/kanban'
+import { isKanbanDoc, kanbanFlagChange, parseKanban, type KanbanChange, type KanbanLane } from '../../lib/kanban/kanban'
 import { nextKanbanView, type KanbanView } from './kanbanView'
-import type { EditorHandle } from '../editor/Editor'
+import type { EditorHandle } from '../../editor/Editor'
 
 type ViewMode = 'live' | 'raw' | 'view'
 export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'moveLane' | 'removeLane' | 'removeCard' | 'toggle' | 'flag' | 'done'}`
