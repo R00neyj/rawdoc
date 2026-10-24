@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (296)
+## `src/app/` 화면과 앱 동작 (298)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -299,7 +299,7 @@
 |`src/app/usePaletteOpen.ts`|명령 팔레트 열림·닫힘과 닫힌 뒤 실행할 명령을 관리함|
 |`src/app/usePaneDropZones.ts`|칸 위로 탭을 끌 때 놓을 자리를 보여 줌|
 |`src/app/usePaneFlip.ts`|칸을 나누거나 닫을 때 칸이 부드럽게 자리를 옮기게 함|
-|`src/app/usePaneHost.ts`|여러 칸에 띄운 같은 문서가 서로 맞도록 이어 주고, 지금 고른 칸의 편집기를 앱 나머지에 알려 줌|
+|`src/app/usePaneHost.ts`|여러 칸에 띄운 같은 문서가 서로 맞도록 이어 주고, 지금 고른 칸의 편집기를 앱 나머지에 알려 줌. 어떤 문서를 띄운 칸 편집기도 찾아 줌|
 |`src/app/usePanelDocs.ts`|오른쪽 패널의 링크·할 일 보기에 쓸 문서 목록을 읽음|
 |`src/app/usePeers.ts`|지금 같은 문서에 접속한 사람 목록을 알려 줌|
 |`src/app/usePhoneSidePanel.ts`|휴대폰 오른쪽 패널을 밀어서 열고 접고 닫는 동작을 맡음|
@@ -330,13 +330,14 @@
 |`src/app/useTabSync.ts`|같은 브라우저의 여러 탭 사이에 변경 신호를 나르고 편집권 메시지를 문서별로 나눠 줌|
 |`src/app/useTaskFilter.ts`|할 일 보기에서 특정 태그만 골라 보는 필터 설정을 관리함|
 |`src/app/useTemplateManager.ts`|템플릿 관리 창에서 템플릿 만들기·편집·삭제를 처리함|
-|`src/app/useTitleCommit.ts`|문서 제목을 저장하고 빈 제목이면 이전 제목으로 되돌림|
+|`src/app/useTitleCommit.ts`|문서 제목을 저장하고 빈 제목이면 이전 제목으로 되돌림. 제목 칸에서 나갈 때 링크 고치기 검사를 부름|
 |`src/app/useToolbarDock.ts`|휴대폰에서 서식 도구 막대를 화면 아래에 붙여 보여 줌|
 |`src/app/useTrashPage.ts`|휴지통 화면에 들어올 때 지금 저장소(서버나 이 브라우저)의 목록을 불러오고 복원·삭제 결과를 반영함|
 |`src/app/useUserCss.ts`|사용자 꾸밈 CSS를 적용하고 다른 탭 변경·안전 모드를 처리함|
 |`src/app/useVaultGate.ts`|사이드바 금고 폴더 잠금·펼침과 금고 상태 읽기를 맡음|
 |`src/app/useViewFind.ts`|보기 모드에서 문서 안 글자 찾기를 처리함|
 |`src/app/useViewportFit.ts`|휴대폰 키보드가 올라오면 앱 화면 높이를 맞춰 줄임|
+|`src/app/useWikiRenameLinks.ts`|제목을 바꾸고 제목 칸에서 나가면 옛 제목 링크를 찾아 묻고, 고르면 문서마다 고쳐 저장하고 되돌리기를 붙임|
 |`src/app/vaultFolderDrop.ts`|금고 폴더에 문서를 끌어놓을 때 암호화 전환할 문서를 가름|
 |`src/app/vaultVisibility.ts`|잠긴 금고의 존재와 문서 개수를 화면에서 숨기는 규칙을 정함|
 |`src/app/viewerScroll.ts`|보기 화면에서 읽던 위치를 기억하고 그 자리로 스크롤함|
@@ -347,6 +348,7 @@
 |`src/app/webgl2.ts`|브라우저가 입체 그림(WebGL2)을 그릴 수 있는지 한 번 재 둠|
 |`src/app/WikiLinkPreview.tsx`|문서 링크에 마우스를 올리면 그 문서 내용을 미리 보여주는 창|
 |`src/app/wikiPreview.ts`|문서 연결 링크에 마우스를 올리면 뜨는 미리보기 규칙을 정함|
+|`src/app/WikiRenameDialog.tsx`|제목을 바꾼 뒤 옛 제목 링크를 함께 고칠지 묻는 확인 창|
 |`src/app/yDevLink.ts`|개발 중에만 쓰는, 두 탭 사이 같은 문서 동시 편집 연결|
 |`src/app/yjsFlush.ts`|열지 않은 문서의 밀린 수정을 한 건씩 서버에 올림|
 
@@ -426,7 +428,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (85)
+## `src/lib/` 공통 규칙 (86)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -517,6 +519,7 @@
 |`src/lib/userCssPolicy.ts`|사용자 꾸미기 코드의 개수·크기 제한과 형식 검사를 정함|
 |`src/lib/wikiGraph.ts`|문서 사이 [[링크]] 관계를 모아 연결 지도를 만듦|
 |`src/lib/wikiLink.ts`|본문에서 [[문서 링크]]를 찾아 읽음|
+|`src/lib/wikiRename.ts`|제목을 바꿀 때 옛 제목으로 이 문서를 가리키던 링크를 찾고, 원문을 고치고, 되돌릴 원문을 계산함|
 |`src/lib/wikiResolve.ts`|[[문서 링크]]가 실제 어느 문서를 가리키는지 찾아냄|
 
 ## `src/storage/` 저장 (12)

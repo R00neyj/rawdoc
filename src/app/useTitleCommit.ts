@@ -17,6 +17,8 @@ export type UseTitleCommitOptions = {
   titleSavingRef: RefObject<Promise<unknown> | null>
   docsRef: RefObject<DocMeta[]>
   currentDocIdRef: RefObject<string | null>
+  // blur·Enter 로 제목 칸에서 나갈 때만 — 탭 숨김·pagehide 에서는 부르지 않는다
+  onTitleLeave?: () => void
 }
 
 export type UseTitleCommitResult = {
@@ -25,7 +27,7 @@ export type UseTitleCommitResult = {
 }
 
 export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitResult {
-  const { store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef } = options
+  const { store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef, onTitleLeave } = options
   // 문서마다 따로 센다 — 하나로 세면 A 저장 중 B 를 저장할 때 A 의 응답이 버려진다
   const titleRequestIdsRef = useRef(new Map<string, number>())
 
@@ -72,26 +74,31 @@ export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitRe
   }, [])
 
   // 포커스를 잃을 때 공백만이면 되돌린다 (ia.md 3.5, F-111 3.4)
-  const handleTitleCommit = useCallback(() => {
+  const fixBlankTitle = useCallback(() => {
     const doc = docsRef.current.find((d) => d.id === currentDocIdRef.current)
     if (doc && doc.title.trim() === '') {
       commitTitleRef.current('제목 없는 문서')
     }
   }, [docsRef, currentDocIdRef])
 
+  const handleTitleCommit = useCallback(() => {
+    fixBlankTitle()
+    onTitleLeave?.()
+  }, [fixBlankTitle, onTitleLeave])
+
   // blur 만으로는 제목칸에 커서를 둔 채 탭을 닫거나 앱을 배경으로 보낼 때 '' 가 그대로 저장된다
   // pagehide 는 최선 시도다 — 브라우저가 페이지를 죽이면 비동기 쓰기가 안 끝날 수 있다 (App.tsx 본문 flush 와 같은 짝)
   useEffect(() => {
     function handleVisibilityChange() {
-      if (document.visibilityState === 'hidden') handleTitleCommit()
+      if (document.visibilityState === 'hidden') fixBlankTitle()
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('pagehide', handleTitleCommit)
+    window.addEventListener('pagehide', fixBlankTitle)
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('pagehide', handleTitleCommit)
+      window.removeEventListener('pagehide', fixBlankTitle)
     }
-  }, [handleTitleCommit])
+  }, [fixBlankTitle])
 
   return { handleTitleChange, handleTitleCommit }
 }

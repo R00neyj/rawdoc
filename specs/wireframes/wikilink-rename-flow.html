@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>제목 바꿀 때 위키링크 함께 고치기 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; max-width: 320px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.end { background: #eee; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .dlg { background: #fff; border: 1px solid #999; border-radius: 10px; width: 480px; padding: 18px 20px; text-align: left; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  .dlg h3 { margin: 0 0 6px; font-size: 16px; }
+  .dlg .muted { color: #777; font-size: 13px; }
+  .dlg ul { list-style: none; padding: 0; margin: 12px 0; border: 1px solid #ddd; border-radius: 6px; max-height: 180px; overflow: auto; }
+  .dlg li { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 13px; display: flex; gap: 8px; }
+  .dlg li:last-child { border-bottom: 0; }
+  .dlg li .n { margin-left: auto; color: #888; }
+  .dlg li.skip { color: #999; }
+  .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .btn { border: 1px solid #aaa; border-radius: 6px; padding: 5px 12px; background: #fff; }
+  .btn.pri { background: #333; color: #fff; border-color: #333; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin: 0; text-align: left; font-size: 13px; }
+  table { border-collapse: collapse; background: #fff; font-size: 13px; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+  ol.dec li { margin: 10px 0; }
+  code { background: #ecece8; padding: 0 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>제목 바꿀 때 위키링크 함께 고치기 플로우</h1>
+<p class="sub">요청: "앱을 써보니, 여러 흩어진 위키링크 찾아서 고치는게 더 힘듦". 지금은 제목을 바꾸면 옛 제목 링크가 끊긴 링크로 남음(F-131, product.md Q26 미결). 제목 칸은 글자 하나 칠 때마다 저장되므로(<code>useTitleCommit</code>) 링크 고치기는 <b>제목 칸에서 나갈 때(blur·Enter)</b> 한 번만, "들어갈 때 제목 → 나갈 때 제목" 기준으로 판단</p>
+
+<h2>0. 무엇이 바뀌나</h2>
+<div class="flow"><div class="branch">
+  <div class="col"><span class="label">다른 문서 원문 — 전</span><pre>[[회의록]] 참고
+[[회의록|지난 회의]]
+[[회의록#결정]]
+[[업무/회의록]]</pre></div>
+  <div class="col"><span class="label">제목 "회의록" → "주간 회의록" 뒤</span><pre>[[주간 회의록]] 참고
+[[주간 회의록|지난 회의]]
+[[주간 회의록#결정]]
+[[업무/주간 회의록]]</pre></div>
+</div>
+<p class="sub" style="margin-top:8px">대상 부분만 바꾸고 <code>|보이는 글</code>·<code>#절</code>·폴더 경로는 그대로. 코드 블록·인라인 코드 안 <code>[[…]]</code> 은 링크가 아니라 건드리지 않음(<code>scanWikiLinks</code> 규칙)</p></div>
+
+<h2>1. 흐름</h2>
+<div class="flow">
+  <div class="box">제목 칸 포커스<small>이때 제목을 기억 (예: 회의록)</small></div>
+  <div class="arrow"></div>
+  <div class="box">제목 고침 → 칸에서 나감 (blur·Enter)<small>제목 저장은 지금처럼 바로</small></div>
+  <div class="arrow"></div>
+  <div class="box key">옛 제목으로 이 문서를 가리키던 링크 찾기<small>내 문서 전부, 링크마다 해석기(<code>createWikiResolver</code>)로 "정말 이 문서를 가리켰나" 판정</small></div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">0개</span><div class="box end">아무것도 안 뜸</div></div>
+    <div class="col"><span class="label">1개 이상</span>
+      <div class="dlg">
+        <h3>링크도 함께 고칠까요?</h3>
+        <div class="muted">"회의록" 을 가리키던 링크 7개(문서 4개)가 "주간 회의록" 으로 바뀝니다.</div>
+        <ul>
+          <li>프로젝트 메모<span class="n">3곳</span></li>
+          <li>2026-10-20<span class="n">2곳</span></li>
+          <li>할 일<span class="n">1곳</span></li>
+          <li>팀 공유 문서<span class="n">1곳</span></li>
+          <li class="skip">금고 문서 2개는 건너뜀</li>
+        </ul>
+        <div class="btns"><span class="btn">고치지 않기</span><span class="btn pri">링크 고치기</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">링크 고치기</span><div class="box">문서마다 원문 고쳐 저장<small>열린 문서·실시간 문서는 <code>Y.Text</code> 경로로</small></div><div class="arrow"></div><div class="box end">알림 "링크 7개를 고쳤습니다" + <code>되돌리기</code></div></div>
+    <div class="col"><span class="label">고치지 않기 · Esc</span><div class="box end">지금처럼 끊긴 링크로 남음</div></div>
+    <div class="col"><span class="label">일부 실패 (오프라인·충돌·권한)</span><div class="box end">알림 "링크 5개를 고쳤고 2개는 못 고쳤습니다" + 못 고친 문서 목록</div></div>
+  </div>
+</div>
+
+<h2>2. 예외 상황</h2>
+<table>
+  <tr><th>상황</th><th>제안</th></tr>
+  <tr><td>옛 제목과 같은 제목의 다른 문서가 있음</td><td>해석기가 그 링크를 이 문서로 풀던 것만 고침. 다른 문서로 풀리던 링크는 안 건드림</td></tr>
+  <tr><td>새 제목이 이미 다른 문서 제목</td><td>대화상자에 경고 한 줄 "같은 제목 문서가 있어 링크가 그쪽으로 갈 수 있습니다". 고치기는 막지 않음</td></tr>
+  <tr><td>오프라인</td><td>대화상자 대신 알림 "오프라인이라 링크를 고치지 못했습니다" — 미뤘다 고치지 않음</td></tr>
+  <tr><td>제목을 지워 <code>제목 없는 문서</code> 로 돌아감</td><td>묻지 않음(빈 제목 문서는 링크 대상이 아님)</td></tr>
+  <tr><td>칸반 카드 글자 안 링크</td><td>칸반도 원문이라 같이 고쳐짐</td></tr>
+  <tr><td>CLI <code>put</code> 로 제목 바꿈</td><td>이번엔 안 함. help 문구 "자동으로 고쳐지지 않아 끊깁니다" 유지</td></tr>
+</table>
+
+<h2>결정 (2026-10-24 사용자)</h2>
+<ol class="dec">
+  <li><b>확인 방식</b> — 대화상자로 묻기</li>
+  <li><b>되돌리기</b> — 알림에 <code>되돌리기</code>, 고친 링크만 옛 제목으로(제목은 그대로)</li>
+  <li><b>금고 문서</b> — 늘 제외, 건너뛴 수만 대화상자에 표시</li>
+  <li><b>공유받은 문서·공유 폴더</b> — 편집 권한 있는 것만 같이 고침</li>
+  <li><b>함께 편집 중인 문서</b> — 제목을 바꾼 사람 화면에서만 묻고 고침</li>
+</ol>
+
+</body>
+</html>

@@ -86,6 +86,29 @@ describe('useTitleCommit 탭이 숨겨지거나 닫힐 때 공백 제목 되돌�
     expect(removed).toContain('document:visibilitychange')
     expect(removed).toContain('window:pagehide')
   })
+
+  // 위키링크 함께 고치기(small 2026-10-24)는 제목 칸에서 나갈 때만 묻는다 — 탭 숨김·창 닫기에 대화상자를 띄우지 않는다
+  it('onTitleLeave 는 blur·Enter(handleTitleCommit)에서만 부른다', () => {
+    const onTitleLeave = vi.fn()
+    const { handleTitleCommit } = attachTitleCommit({
+      store: { update: vi.fn(async () => ({ id: 'A', updatedAt: 2 })) },
+      currentDocId: 'A',
+      isRealtime: false,
+      setDocs: vi.fn(),
+      showNotice: vi.fn(),
+      editorRef: ref(null),
+      titleSavingRef: ref(null),
+      docsRef: ref([{ id: 'A', title: '메모' }]),
+      currentDocIdRef: ref('A'),
+      onTitleLeave,
+    } as unknown as UseTitleCommitOptions)
+    visibilityState = 'hidden'
+    docListeners['visibilitychange']()
+    winListeners['pagehide']()
+    expect(onTitleLeave).not.toHaveBeenCalled()
+    handleTitleCommit()
+    expect(onTitleLeave).toHaveBeenCalledTimes(1)
+  })
 })
 
 // 요청 번호가 문서 사이에 하나였다 — A 저장 중 B 를 저장하면 A 의 updatedAt 이 버려졌다

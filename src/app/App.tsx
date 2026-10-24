@@ -75,6 +75,7 @@ import ImportFileInputs from './ImportFileInputs'
 import Sidebar, { type SharedDocLike, type SidebarCommands } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
 import DonateDialog from './DonateDialog'
+import WikiRenameDialog from './WikiRenameDialog'
 import useDonatePrompt from './useDonatePrompt'
 import type { DeleteTarget } from './ConfirmDeleteDialog'
 import type { MoveDocTarget } from './MoveDocDialog'
@@ -102,6 +103,7 @@ import { usePushDevice } from './usePushDevice'
 import { useGithubFlow } from './useGithubFlow'
 import useUserCss from './useUserCss'
 import { useTitleCommit } from './useTitleCommit'
+import { useWikiRenameLinks } from './useWikiRenameLinks'
 import { useCommentFab, fabAnchorOf } from './useCommentFab'
 import { useDocNavigation } from './useDocNavigation'
 import { useSharedFolderCreate } from './useSharedFolderCreate'
@@ -1128,9 +1130,10 @@ export default function App() {
     }
   }
 
-  // ----- 제목 저장 (F-2079) -----
+  // ----- 제목 저장 (F-2079) · 옛 제목 위키링크 함께 고치기 (small 2026-10-24) -----
+  const wikiRename = useWikiRenameLinks({ store, docsRef, foldersRef, currentDocIdRef, paneHost, showNotice })
   const { handleTitleChange, handleTitleCommit } = useTitleCommit({
-    store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef,
+    store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef, onTitleLeave: wikiRename.checkRename,
   })
 
   // ----- 잠긴 금고 폴더 문·금고 잠그기 (F-4003) -----
@@ -1448,6 +1451,7 @@ export default function App() {
         rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings }, kanbanSettings, settingsTab,
       }} />
       <DonateDialog />
+      <WikiRenameDialog {...wikiRename.dialog} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />
     </div>

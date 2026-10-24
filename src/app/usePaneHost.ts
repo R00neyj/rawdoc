@@ -26,6 +26,8 @@ export type PaneHost = {
   publish: (focusKey: string | null, current: boolean) => void
   focusEditor: (paneKey: string) => boolean
   getText: (docId: string, lineEnding: LineEnding) => string
+  // 그 문서를 띄운 칸 편집기 — 포커스 칸 먼저, 없으면 null
+  editorFor: (docId: string) => EditorHandle | null
   // 창 안 원본이 있는 로컬 문서만 — 그 밖은 null (F-2161 5장)
   getComments: (docId: string, local: boolean) => CommentRecord[] | null
 }
@@ -45,6 +47,12 @@ function createPaneHost(opts: Pick<UsePaneHostOptions, 'setEditorRefs' | 'viewer
   const entries = new Map<string, PaneEntry>()
   const published: { key: string | null; handle: EditorHandle | null } = { key: null, handle: null }
   let rebuild = false
+
+  function editorFor(docId: string): EditorHandle | null {
+    const focused = published.key === null ? undefined : entries.get(published.key)
+    const shown = [focused, ...entries.values()].find((e) => e?.docId === docId && e.editorRef.current)
+    return shown?.editorRef.current ?? null
+  }
 
   const host: PaneHost & { takeRebuild: () => boolean } = {
     sources,
@@ -78,10 +86,9 @@ function createPaneHost(opts: Pick<UsePaneHostOptions, 'setEditorRefs' | 'viewer
     getText(docId, lineEnding) {
       const source = sources.source(docId)
       if (source) return sourceText(source, lineEnding)
-      const focused = published.key === null ? undefined : entries.get(published.key)
-      const shown = [focused, ...entries.values()].find((e) => e?.docId === docId && e.editorRef.current)
-      return shown?.editorRef.current?.getText(lineEnding) ?? ''
+      return editorFor(docId)?.getText(lineEnding) ?? ''
     },
+    editorFor,
     getComments(docId, local) {
       const source = local ? sources.source(docId) : null
       if (!source) return null
