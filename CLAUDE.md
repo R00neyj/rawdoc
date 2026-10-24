@@ -98,6 +98,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Editor | CodeMirror 6 + `@codemirror/lang-markdown` | In use |
 | Merge view | `@codemirror/merge` 6.12.2 (`unifiedMergeView`) — only in the GitHub pull dialog, lazy-loaded via `import()` | In use (F-2129) |
 | Code syntax colors | lezer grammars (`@lezer/*` — python 1.1.19, json 1.0.3, yaml 1.0.4, xml 1.0.6; javascript/css/html/common/lr pinned at the lock version) + `@codemirror/lang-sql` 6.10.0 and `@codemirror/legacy-modes` 6.5.4 (shell), shared by editor and viewer, grammars lazy-loaded via `import()` | In use (F-2123~F-2126) |
+| CJK emphasis | `markdown-it-cjk-friendly` 3.0.0 (+ `get-east-asian-width`) — `**"문구"**를` bolds next to Korean. Imported only by the viewer `md` (`src/viewer/renderMarkdown.ts`) and the editor wrapper `src/editor/cjkEmphasis.ts`, which calls the same `scanDelims` so both modes agree | In use (F-2168) |
 | PWA | `vite-plugin-pwa` (Workbox) | In use |
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |

@@ -3,9 +3,10 @@ import { markdownLanguage } from '@codemirror/lang-markdown'
 import type { MarkdownParser } from '@lezer/markdown'
 
 import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from '../../lib/wikiLink'
+import { cjkEmphasis } from '../cjkEmphasis'
 
 // markdownLanguage.parser 는 공개 타입(LRParser)으로 좁혀지지만 실제로는 항상 MarkdownParser 인스턴스다(@codemirror/lang-markdown 구현) — nodeSet·parseInline 접근에 필요
-const parser = markdownLanguage.parser as unknown as MarkdownParser
+const parser = (markdownLanguage.parser as unknown as MarkdownParser).configure([cjkEmphasis])
 
 // @lezer/markdown Element 는 .d.ts 에 children 이 빠져 있다(런타임엔 있다) — 여기서만 보강해 쓴다
 type LezerElement = { type: number; from: number; to: number; children: LezerElement[] }

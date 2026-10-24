@@ -371,6 +371,7 @@
 |`src/editor/Editor.tsx`|화면에 글쓰기 편집기를 붙이는 틀|
 |`src/editor/fontRemeasure.ts`|글꼴이 늦게 내려받아지면 편집기 높이를 다시 잼|
 |`src/editor/formatCommands.ts`|우클릭 메뉴로 취소선·형광펜·수식 등 서식 기호를 넣고 뺌|
+|`src/editor/cjkEmphasis.ts`|`**"문구"**를` 처럼 한글 옆 굵게·기울임·취소선 기호를 보기 모드와 똑같이 알아보게 함|
 |`src/editor/frontmatter.ts`|문서 맨 위 속성 정보 영역을 알아보고 표로 보여 줌|
 |`src/editor/highlight.ts`|마크다운 기호와 제목 등에 색과 굵기를 입힐 표시를 붙임|
 |`src/editor/imageInsert.ts`|이미지를 붙여넣거나 끌어놓으면 본문에 넣을 자리를 정함|

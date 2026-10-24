@@ -1,6 +1,7 @@
 // 마크다운 → HTML 문자열 변환 (specs/features/F-123.md 3.2)
 // 순수 함수. DOM·React 를 다루지 않는다
 import MarkdownIt from 'markdown-it'
+import cjkFriendly from 'markdown-it-cjk-friendly'
 import type { StateBlock, StateCore, StateInline, Delimiter, Token, RendererRule } from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout'
@@ -18,6 +19,8 @@ import { isMermaidInfo } from '../lib/codeLang'
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 그대로 — javascript: vbscript: file: data: 를 막는다
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false })
+// 한중일 글자 옆 강조 기호 — 플랭킹 판정(scanDelims)만 바꾼다 (F-2168)
+md.use(cjkFriendly)
 
 // 한 번 줄바꿈을 <br> 로 그릴지 — 옵션 breaks 가 없으면 앱 설정(lineBreaksPref.ts)이 넣은 값 (small 2026-10-22)
 let defaultSoftBreaks = false

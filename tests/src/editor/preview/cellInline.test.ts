@@ -101,4 +101,12 @@ describe('parseCellInline', () => {
   it('인라인코드 안의 <br> 은 글자 그대로', () => {
     expect(parseCellInline('`a<br>b`')).toEqual([{ text: 'a<br>b', marks: ['code'] }])
   })
+
+  it('문장부호 안쪽·한글 바깥 강조도 굵게 (F-2168 U2)', () => {
+    expect(parseCellInline('과변조 **"문구"**를')).toEqual([
+      { text: '과변조 ', marks: [] },
+      { text: '"문구"', marks: ['strong'] },
+      { text: '를', marks: [] },
+    ])
+  })
 })

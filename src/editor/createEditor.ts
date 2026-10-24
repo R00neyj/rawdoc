@@ -23,6 +23,7 @@ import {
 } from './docTitle'
 import type { Breadcrumb, OnNavigateFolder, OnTitleChange, OnTitleCommit } from './docTitle'
 import { frontmatterExtension } from './frontmatter'
+import { cjkEmphasis } from './cjkEmphasis'
 import { highlightExtension } from './highlight'
 import { codeEditorExtension, codeLanguageFor } from './codeLanguages'
 import { shortcutKeymap } from './commands'
@@ -447,7 +448,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     autoPair(),
     // base: markdownLanguage — commonmark 기본값은 GFM 표를 못 읽는다(spike index.js 86~88행). extensions: frontmatterExtension() 없으면 lezer 가 첫 `---` 를 HorizontalRule 로 잘못 읽는다(F-133 3.2)
     // addKeymap:false — markdownKeymap 기본 Enter 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)
-    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false, codeLanguages: codeLanguageFor }),
+    markdown({ base: markdownLanguage, extensions: [frontmatterExtension(), cjkEmphasis], addKeymap: false, codeLanguages: codeLanguageFor }),
     Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),

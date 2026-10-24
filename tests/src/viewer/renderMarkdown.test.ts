@@ -1,6 +1,7 @@
 // specs/features/F-123.md 4장 A1·A2
 import { describe, expect, it } from 'vitest'
 import { parseMarkdownTokens, renderMarkdown, renderMarkdownInline, setDefaultSoftBreaks } from '../../../src/viewer/renderMarkdown'
+import { findHighlights } from '../../../src/lib/highlightSyntax'
 
 describe('renderMarkdown — 표·취소선', () => {
   it('GFM 표를 <table> 로 바꾼다', () => {
@@ -511,6 +512,11 @@ describe('renderMarkdown — 하이라이트 ==…==', () => {
     const html = renderMarkdown('==글자 ==')
     expect(html).not.toContain('<mark')
     expect(html).toContain('==')
+  })
+
+  it('문장부호 안쪽·한글 바깥 하이라이트 — 편집 쪽 findHighlights 와 같다 (F-2168 U4)', () => {
+    expect(renderMarkdown('과변조 =="문구"==를').match(/<mark>/g)).toHaveLength(1)
+    expect(findHighlights('과변조 =="문구"==를')).toHaveLength(1)
   })
 
   it('A5 중첩 — 다른 인라인 서식을 건너뛴다', () => {

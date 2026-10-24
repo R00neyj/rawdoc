@@ -13,6 +13,9 @@ describe('toPlainText — 인라인 서식 (A2)', () => {
   it('굵게·기울임·취소선·하이라이트·인라인코드 기호가 없다', () => {
     expect(toPlainText('**굵게** *기울임* ~~취소~~ ==강조== `코드`', 'lf')).toBe('굵게 기울임 취소 강조 코드\n')
   })
+  it('문장부호 안쪽·한글 바깥 굵게 기호도 없다 (F-2168 U3)', () => {
+    expect(toPlainText('과변조 **"문구"**를', 'lf')).toBe('과변조 "문구"를\n')
+  })
 })
 
 describe('toPlainText — 링크 (A3)', () => {

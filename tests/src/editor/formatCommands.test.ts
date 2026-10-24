@@ -12,6 +12,7 @@ import {
   toggleMath,
   toggleStrike,
 } from '../../../src/editor/formatCommands'
+import { cjkEmphasis } from '../../../src/editor/cjkEmphasis'
 
 const markdownExt = () => markdown({ base: markdownLanguage })
 
@@ -199,6 +200,13 @@ describe('clearFormatting', () => {
     const { ran, state } = run(clearFormatting, '**a**', EditorSelection.single(0, 5), [])
     expect(ran).toBe(false)
     expect(state.doc.toString()).toBe('**a**')
+  })
+
+  it('문장부호 안쪽·한글 바깥 굵게도 지운다 (F-2168 U3)', () => {
+    const doc = '과변조 **"문구"**를'
+    const extensions = [markdown({ base: markdownLanguage, extensions: [cjkEmphasis] })]
+    const { state } = run(clearFormatting, doc, EditorSelection.single(0, doc.length), extensions)
+    expect(state.doc.toString()).toBe('과변조 "문구"를')
   })
 })
 
