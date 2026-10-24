@@ -31,8 +31,8 @@ import type { NoticeWithAction } from '../NoticeBar'
 import { browserFlushDeps } from '../bootFlow'
 import { getPref, setPref } from '../prefs'
 import type { UseE2ee } from './useE2ee'
-import type { LiveDocSession } from '../useLiveDoc'
-import { flushDocForMove } from '../yjsFlush'
+import type { LiveDocSession } from '../session/useLiveDoc'
+import { flushDocForMove } from '../session/yjsFlush'
 import { convertedDocIds, planVaultDropConvert } from './vaultFolderDrop'
 
 // 멈추기를 누르면 곧바로 풀리는 기다림 (F-407 2.2)

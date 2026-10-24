@@ -2,7 +2,7 @@
 import { decodeMarkdown } from '../../lib/decodeMarkdown'
 import { fromEditorText, toEditorText, type LineEnding } from '../../lib/lineEnding'
 import { decodeGithubContent, githubErrorMessage, type GithubFailure } from './githubUi'
-import { MAX_CONTENT_BYTES } from '../importWorkspace'
+import { MAX_CONTENT_BYTES } from '../importExport/importWorkspace'
 
 export type PulledText = { text: string; hadBom: boolean; lineEnding: LineEnding; mixed: boolean; hasBreak: boolean }
 

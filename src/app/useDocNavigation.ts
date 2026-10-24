@@ -13,7 +13,7 @@ import { replaceHashUrl, pushHashUrl, pushHelpHash, pushTrashHash } from './useH
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import type { EditorHandle } from '../editor/Editor'
 import type { ShareDoc } from '../lib/share/shareCodec'
-import type { PaletteCreatePlan } from './paletteContract'
+import type { PaletteCreatePlan } from './palette/paletteContract'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseNotificationsResult } from './useNotifications'

@@ -1,4 +1,4 @@
-// YProvider 한 번 연결 = 시도 한 번. 재연결은 제어기(src/app/liveDoc.ts)가 한다 (specs/features/F-305.md 6장)
+// YProvider 한 번 연결 = 시도 한 번. 재연결은 제어기(src/app/session/liveDoc.ts)가 한다 (specs/features/F-305.md 6장)
 import YProvider from 'y-partyserver/provider'
 import { removeAwarenessStates } from 'y-protocols/awareness'
 import type * as Y from 'yjs'

@@ -14,7 +14,7 @@ import { setPref } from './prefs'
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import { ancestorsOfDoc } from '../lib/folderTree'
 import { firstListedDocId } from './vault/vaultVisibility'
-import type { UseLocalFileResult } from './useLocalFile'
+import type { UseLocalFileResult } from './localFile/useLocalFile'
 
 export function replaceHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`

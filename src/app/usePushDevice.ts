@@ -4,7 +4,7 @@ import { getPref, setPref } from './prefs'
 import { storedAccount, type AccountState } from './account/account'
 import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
-import type { SettingsPush } from './SettingsDialog'
+import type { SettingsPush } from './settings/SettingsDialog'
 import {
   PUSH_SW_READY_TIMEOUT_MS,
   fetchPushKey,

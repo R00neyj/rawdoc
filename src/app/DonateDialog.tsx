@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import Dialog from './Dialog'
 import { closeDonateDialog, useDonateDialogOpen } from './donateStore'
 import { IconFavorite } from './icons'
-import { usePhoneWidth } from './usePhoneWidth'
+import { usePhoneWidth } from './phone/usePhoneWidth'
 import { DONATE_QR_PATH, TOSS_DONATE_URL } from '../lib/donateLink'
 
 export default function DonateDialog() {

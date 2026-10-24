@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { getPref, setPref } from '../prefs'
 import type { KanbanSettings } from './useKanbanSettings'
 import { truncateChars } from '../../lib/truncate'
-import SettingsCard from '../SettingsCard'
+import SettingsCard from '../settings/SettingsCard'
 
 // 네이티브 목록은 가장 긴 항목만큼 넓어진다 (tweak 2026-10-15)
 const LANE_OPTION_MAX_CHARS = 30

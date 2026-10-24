@@ -17,14 +17,14 @@ import {
 import usePresence from './usePresence'
 import { commentBadgeText } from './comments/commentRail'
 import { moreDotVisible, moreSheetItems, type MoreItemKey, type TopBarScreen } from './topBarMore'
-import { exportMenuItems, type ExportMenuProps } from './ExportMenu'
+import { exportMenuItems, type ExportMenuProps } from './importExport/ExportMenu'
 import { useShareMenu, type MenuAction, type ShareMenuProps } from './share/ShareMenu'
 import MenuItemSkeleton from './MenuItemSkeleton'
 import { NotificationsList, type NotificationsMenuProps } from './NotificationsMenu'
 import type { OutlineControl } from './Outline'
 import { GithubStatusLine, type GithubMenuProps } from './github/GithubMenu'
 import { githubMenuItems } from './github/githubUi'
-import { useSheetDragClose } from './useSheetDragClose'
+import { useSheetDragClose } from './phone/useSheetDragClose'
 
 type SubView = 'share' | 'export' | 'github'
 

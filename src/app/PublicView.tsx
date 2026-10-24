@@ -15,8 +15,8 @@ import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { makeViewOutlineHandle } from './viewOutlineHandle'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import AccessRequestControl from './share/AccessRequestControl'
-import { buildExportPayload } from './exportDoc'
-import SettingsDialog from './SettingsDialog'
+import { buildExportPayload } from './importExport/exportDoc'
+import SettingsDialog from './settings/SettingsDialog'
 import {
   fetchPublicDoc,
   fetchPublicFolder,

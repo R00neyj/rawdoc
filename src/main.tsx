@@ -55,8 +55,8 @@ import './app/viewFind.css'
 import './styles/wikiPreview.css'
 
 import { getPref } from './app/prefs'
-import { resolveTheme } from './app/theme'
-import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './app/contentWidth'
+import { resolveTheme } from './app/appearance/theme'
+import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './app/appearance/contentWidth'
 import { markAppEntry } from './app/markAppEntry'
 import App from './app/App'
 import { DEV_YSYNC } from './editor/devSyncFlag'
@@ -100,7 +100,7 @@ if (location.hash.startsWith(CLI_LOGIN_HASH_PREFIX)) {
   })
 } else if (DEV_YSYNC) {
   // 개발 빌드 ?ysync — 첫 에디터가 만들어지기 전에 연결 훅을 심는다. 운영 빌드에서는 DEV_YSYNC 가 false 로 접혀 이 분기와 모듈이 빠진다 (F-303 9.1)
-  import('./app/yDevLink')
+  import('./app/session/yDevLink')
     .then((module) => module.installDevLink())
     .catch((error: unknown) => console.error(error))
     .finally(render)

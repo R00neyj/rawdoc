@@ -11,7 +11,7 @@ import {
   CONTENT_WIDTH_STEP,
   DEFAULT_CONTENT_WIDTH,
   CONTENT_WIDTH_VAR,
-} from './contentWidth'
+} from './appearance/contentWidth'
 import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_SNIPPETS } from '../lib/userCssPolicy'
 import { USER_CSS_REV_ATTR } from '../lib/userCssContract'
 

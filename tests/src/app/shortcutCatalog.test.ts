@@ -15,7 +15,7 @@ import {
 } from '../../../src/app/shortcutCatalog'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode } from '../../../src/app/contextMenuItems'
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
-import { PALETTE_COMMANDS } from '../../../src/app/paletteCommands'
+import { PALETTE_COMMANDS } from '../../../src/app/palette/paletteCommands'
 
 const ID_RE = /^[a-z][a-z0-9]*\.[a-z][a-zA-Z0-9]*$/
 

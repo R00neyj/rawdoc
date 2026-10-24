@@ -68,13 +68,13 @@ import { ImportMenu } from './github/GithubMenu'
 import SidebarMoreMenu from './SidebarMoreMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
-import { openDocInNewTab } from './openInNewTab'
+import { openDocInNewTab } from './panes/openInNewTab'
 import { GUIDES_PATH } from '../lib/siteChrome'
 import AccountMenu, { type AccountMenuProps } from './account/AccountMenu'
 import SidebarFooter from './SidebarFooter'
 import type { Notice } from './notice'
 import { visibleOpenFolderIds, type VaultFolderGate } from './vault/vaultVisibility'
-import { startTabDrag } from './useTabDrag'
+import { startTabDrag } from './panes/useTabDrag'
 
 export { SIDEBAR_ID }
 

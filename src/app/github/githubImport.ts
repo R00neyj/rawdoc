@@ -4,7 +4,7 @@ import type { GithubFile, GithubLink, GithubLinkPut } from '../../lib/github/git
 import type { Doc, LineEnding } from '../../types'
 import type { GithubResult } from './githubApi'
 import { decodeGithubContent, githubDocTitle, githubErrorMessage, GITHUB_TOO_LARGE_MESSAGE } from './githubUi'
-import { MAX_CONTENT_BYTES } from '../importWorkspace'
+import { MAX_CONTENT_BYTES } from '../importExport/importWorkspace'
 
 type Notice = { type: 'info' | 'error'; message: string }
 export type GithubImportDeps = {

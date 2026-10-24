@@ -1,6 +1,6 @@
 // 칸반 카드 끌기 판정 순수 함수 — 집기·놓을 자리·가장자리 자동 스크롤 (F-2142 2장)
 import { MapMode, type ChangeDesc } from '@codemirror/state'
-import { DRAG_AXIS_SLOP_PX } from '../edgeSwipe'
+import { DRAG_AXIS_SLOP_PX } from '../phone/edgeSwipe'
 
 export const KANBAN_PICKUP_MOUSE_PX = 4
 export const KANBAN_LONG_PRESS_MS = 400

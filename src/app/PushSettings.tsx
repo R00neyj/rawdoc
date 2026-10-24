@@ -1,5 +1,5 @@
 // 설정 `계정` 묶음의 `알림` 카드 — 스위치·아래 줄·테스트 버튼 (F-2110 6.2)
-import type { SettingsPush } from './SettingsDialog'
+import type { SettingsPush } from './settings/SettingsDialog'
 
 export default function PushSettings({ push }: { push: SettingsPush }) {
   const { view } = push

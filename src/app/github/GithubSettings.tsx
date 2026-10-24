@@ -1,6 +1,6 @@
 // 설정 `계정` 묶음 `연결` 카드의 GitHub — 연결·해제·이번 달 사용 횟수 (specs/features/F-2128.md 4.6)
 import { GITHUB_RECONNECT_MESSAGE } from './githubUi'
-import type { SettingsGithub } from '../SettingsDialog'
+import type { SettingsGithub } from '../settings/SettingsDialog'
 
 export default function GithubSettings({ github }: { github: SettingsGithub }) {
   const { status, online } = github

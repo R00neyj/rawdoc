@@ -17,13 +17,13 @@ import { E2EE_SERVER_SAVE_INTERVAL_MS } from '../../src/storage/serverStore'
 import { RECOVERY_CODE_BYTES } from '../../src/e2ee/recoveryCode'
 import { buildE2eeConvertDialogText } from '../../src/e2ee/convert'
 import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW } from '../../src/lib/peers'
-import { DISCONNECT_NOTICE_MS } from '../../src/app/liveDoc'
-import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../../src/app/importWorkspace'
+import { DISCONNECT_NOTICE_MS } from '../../src/app/session/liveDoc'
+import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../../src/app/importExport/importWorkspace'
 import { E2EE_SERVER_MAX_CONTENT_BYTES } from '../../src/lib/vault/e2eeLimits'
 import { RETAIN_MS } from '../../src/storage/yjsStore'
-import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../../src/app/attachImages'
+import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../../src/app/importExport/attachImages'
 import { MAX_SIDE } from '../../src/lib/shrinkImage'
-import { GRACE_MS } from '../../src/app/attachmentGc'
+import { GRACE_MS } from '../../src/app/importExport/attachmentGc'
 import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../../src/lib/docSearch'
 import { ACCOUNT_DELETE_FRESH_MS } from '../../src/lib/account/accountDeletion'
 import {
@@ -67,18 +67,18 @@ import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/map/localGraph'
 import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
 import { CALENDAR_DEFAULT_FORMAT } from '../../src/lib/calendar'
 import { DEFAULT_TASK_FILTER } from '../../src/app/useTaskFilter'
-import { PHONE_QUERY } from '../../src/app/usePhoneWidth'
+import { PHONE_QUERY } from '../../src/app/phone/usePhoneWidth'
 import { NARROW_QUERY } from '../../src/app/useSidebarLayout'
 import { GITHUB_PUSH_MAX_IMAGES } from '../../src/lib/github/githubContract'
 import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../src/app/github/githubImages'
 import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/github/githubUi'
 import { sameNotice } from '../../src/app/github/githubPull'
 import { pushedNotice } from '../../src/app/github/githubPush'
-import { MAX_TABS } from '../../src/app/docTabs'
-import { MAX_PANES, MIN_PANE_PX, RATIO_MAX, RATIO_MIN } from '../../src/app/splitLayout'
-import { PANES_FULL, TABS_FULL } from '../../src/app/paneRules'
-import { EDGE_BAND } from '../../src/app/paneDrag'
-import { KEY_STEP } from '../../src/app/SplitDividers'
+import { MAX_TABS } from '../../src/app/panes/docTabs'
+import { MAX_PANES, MIN_PANE_PX, RATIO_MAX, RATIO_MIN } from '../../src/app/panes/splitLayout'
+import { PANES_FULL, TABS_FULL } from '../../src/app/panes/paneRules'
+import { EDGE_BAND } from '../../src/app/panes/paneDrag'
+import { KEY_STEP } from '../../src/app/panes/SplitDividers'
 
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
@@ -777,11 +777,11 @@ describe('tabs-split 글', () => {
 
   it('인용한 화면 글자가 코드에 그대로 있다', () => {
     const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
-    expect(source('../../src/app/useDocTabs.ts')).toContain('`탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`')
-    const bar = source('../../src/app/DocTabBar.tsx')
+    expect(source('../../src/app/panes/useDocTabs.ts')).toContain('`탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`')
+    const bar = source('../../src/app/panes/DocTabBar.tsx')
     for (const label of ['다른 탭 닫기', '오른쪽 탭 닫기', '오른쪽에 분할', '아래에 분할', '칸 닫기', '${title} 탭 메뉴', '새 탭']) expect(bar, label).toContain(label)
-    expect(source('../../src/app/SplitDividers.tsx')).toContain('aria-label="칸 경계"')
-    expect(source('../../src/app/PhoneTabsSheet.tsx')).toContain('aria-label="탭 고르기"')
+    expect(source('../../src/app/panes/SplitDividers.tsx')).toContain('aria-label="칸 경계"')
+    expect(source('../../src/app/phone/PhoneTabsSheet.tsx')).toContain('aria-label="탭 고르기"')
   })
 
   it('글에 제품명이 없다 (R6)', () => {

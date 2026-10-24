@@ -1,7 +1,7 @@
 // 금고 대화상자 — D-8 만들기, D-11 열기(+복구), D-12 암호 바꾸기, D-13 초기화, 잠금 해제 폼 (specs/features/F-404.md 7장)
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import Dialog from '../Dialog'
-import { downloadBlob } from '../exportDoc'
+import { downloadBlob } from '../importExport/exportDoc'
 import { DELETE_TRASH_TEXT } from '../trashView'
 import { E2EE_MIN_PASSWORD_CHARS, isE2eePasswordLongEnough } from '../../lib/vault/e2eeLimits'
 import type { E2eeActionError, E2eeScope, Keyring } from '../../e2ee/keyring'

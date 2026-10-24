@@ -1,14 +1,14 @@
 // F-2074 7.1 U1~U16 부팅 첫 화면 판정, R1~R3 부팅 갈래, F-2134 R6~R10 계정 확인 전 셸
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { decideBootRoute, runBoot, type BootDeps, type BootRouteInput } from '../../../src/app/bootFlow'
-import type { DocUnit } from '../../../src/app/docUnit'
+import type { DocUnit } from '../../../src/app/session/docUnit'
 import { fetchAccount, type AccountState } from '../../../src/app/account/account'
 import { ACCOUNT_CONFIRM_WAIT_MS } from '../../../src/app/bootList'
 import { openStore } from '../../../src/storage/openStore'
 import { openYjsStore } from '../../../src/storage/yjsStore'
 import { createMemoryStore } from '../../../src/storage/memoryStore'
 import { migrateLocalIfNeeded } from '../../../src/app/migrateLocal'
-import { cleanupUnusedAttachments, scheduleAttachmentGc } from '../../../src/app/attachmentGc'
+import { cleanupUnusedAttachments, scheduleAttachmentGc } from '../../../src/app/importExport/attachmentGc'
 import type { Doc, Store } from '../../../src/types'
 
 vi.mock('../../../src/app/account/account', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../src/app/account/account')>()), fetchAccount: vi.fn() }))
@@ -17,7 +17,7 @@ vi.mock('../../../src/storage/yjsStore', () => ({ openYjsStore: vi.fn(() => Prom
 vi.mock('../../../src/e2ee/e2eeStore', () => ({ withE2ee: vi.fn((store: Store) => store) }))
 vi.mock('../../../src/app/migrateLocal', () => ({ migrateLocalIfNeeded: vi.fn(async () => {}) }))
 vi.mock('../../../src/storage/idbStore', () => ({ createIdbStore: vi.fn() }))
-vi.mock('../../../src/app/attachmentGc', () => ({ scheduleAttachmentGc: vi.fn(() => () => {}), cleanupUnusedAttachments: vi.fn() }))
+vi.mock('../../../src/app/importExport/attachmentGc', () => ({ scheduleAttachmentGc: vi.fn(() => () => {}), cleanupUnusedAttachments: vi.fn() }))
 
 const base: BootRouteInput = { hash: { type: 'none' }, docs: [{ id: 'a' }, { id: 'b' }], lastDocId: null, startScreen: 'home', startDocId: null }
 const route = (over: Partial<BootRouteInput>) => decideBootRoute({ ...base, ...over })

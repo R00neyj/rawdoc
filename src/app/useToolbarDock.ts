@@ -2,9 +2,9 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import { isComposing } from '../editor/composition'
-import { DOCK_QUERY } from './viewportFit'
-import { typingSurface } from './softKeyboard'
-import { useSoftKeyboard } from './useSoftKeyboard'
+import { DOCK_QUERY } from './phone/viewportFit'
+import { typingSurface } from './phone/softKeyboard'
+import { useSoftKeyboard } from './phone/useSoftKeyboard'
 
 const ROW_SELECTOR = '.editor-toolbar-row'
 

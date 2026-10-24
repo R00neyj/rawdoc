@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { getPref, setPref } from './prefs'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
-import { useBackToClose } from './useBackToClose'
-import { useEdgeSwipe } from './useEdgeSwipe'
+import { useBackToClose } from './phone/useBackToClose'
+import { useEdgeSwipe } from './phone/useEdgeSwipe'
 
 export const NARROW_QUERY = '(max-width: 1023px)'
 

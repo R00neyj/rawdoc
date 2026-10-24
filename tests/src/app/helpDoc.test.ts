@@ -10,15 +10,15 @@ import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../../../src/lib/vault/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../../src/app/wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/comments/docComments'
 import { RETAIN_MS } from '../../../src/storage/yjsStore'
-import { MAX_CONTENT_BYTES } from '../../../src/app/importWorkspace'
+import { MAX_CONTENT_BYTES } from '../../../src/app/importExport/importWorkspace'
 import { PUSH_BATCH_MS, PUSH_QUOTA_RATIO } from '../../../src/lib/pushPayload'
-import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../src/app/attachImages'
+import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../src/app/importExport/attachImages'
 import { SHORTCUT_CATALOG, formatChord } from '../../../src/app/shortcutCatalog'
 import { TODO_MAX_ITEMS } from '../../../src/lib/docTodos'
 import { CALENDAR_DEFAULT_FORMAT } from '../../../src/lib/calendar'
 import { DEFAULT_TASK_FILTER } from '../../../src/app/useTaskFilter'
-import { MAX_TABS } from '../../../src/app/docTabs'
-import { MAX_PANES } from '../../../src/app/splitLayout'
+import { MAX_TABS } from '../../../src/app/panes/docTabs'
+import { MAX_PANES } from '../../../src/app/panes/splitLayout'
 import { NARROW_QUERY } from '../../../src/app/useSidebarLayout'
 
 // F-257.md 2장 표의 절 순서 그대로
@@ -391,7 +391,7 @@ describe('도움말 ## AI 앱 연결 절', () => {
     expect(section.body).toContain('`/mcp`')
     expect(readSource('../../../worker/oauthPages.ts')).toContain('value="yes">허용</button>')
     expect(section.body).toContain('`허용`')
-    expect(readSource('../../../src/app/SettingsDialog.tsx')).toContain("account: '계정'")
+    expect(readSource('../../../src/app/settings/SettingsDialog.tsx')).toContain("account: '계정'")
     expect(readSource('../../../src/app/account/ConnectedAppsTab.tsx')).toContain('>연결된 앱</h5>')
     expect(section.body).toContain('`계정` 탭 `연결된 앱`')
     expect(readSource('../../../src/app/account/ConnectedAppsTab.tsx')).toContain("'연결 끊기'")

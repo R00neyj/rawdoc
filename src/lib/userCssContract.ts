@@ -81,7 +81,7 @@ const MENU_FILES = [
   'src/app/ContextMenu.tsx',
   'src/app/account/AccountMenu.tsx',
   'src/app/EditorToolbar.tsx',
-  'src/app/ExportMenu.tsx',
+  'src/app/importExport/ExportMenu.tsx',
   'src/app/FolderMenu.tsx',
   'src/app/HelpMenu.tsx',
   'src/app/share/ShareMenu.tsx',
@@ -99,7 +99,7 @@ export const CHROME_HOOKS: readonly ChromeHook[] = [
   {
     value: 'doc-title',
     label: '문서 제목 — 편집·보기·인쇄',
-    files: ['src/editor/docTitle.ts', 'src/viewer/Viewer.tsx', 'src/app/printDoc.ts'],
+    files: ['src/editor/docTitle.ts', 'src/viewer/Viewer.tsx', 'src/app/importExport/printDoc.ts'],
   },
   { value: 'editor', label: '편집기 — 편집·원문 모드', files: ['src/editor/Editor.tsx'] },
   { value: 'viewer', label: '보기 모드 본문 틀', files: ['src/viewer/Viewer.tsx'] },

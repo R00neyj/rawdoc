@@ -339,7 +339,7 @@ const CLASS_SOURCES: Record<string, string[]> = {
   'md-code': ['src/editor/highlight.ts'],
   'md-link': ['src/editor/preview/inline.ts'],
   'md-highlight': ['src/editor/preview/highlightMark.ts'],
-  'markdown-body': ['src/viewer/Viewer.tsx', 'src/app/printDoc.ts', 'src/viewer/toHtmlDoc.ts'],
+  'markdown-body': ['src/viewer/Viewer.tsx', 'src/app/importExport/printDoc.ts', 'src/viewer/toHtmlDoc.ts'],
   'markdown-callout': ['src/viewer/renderMarkdown.ts'],
 }
 const CM6_CLASSES = new Set(['cm-editor', 'cm-line', 'cm-content'])

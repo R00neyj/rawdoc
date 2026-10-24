@@ -9,8 +9,8 @@ import { lockDocMetas, planE2eeReset, type E2eeStore } from '../../e2ee/e2eeStor
 import type { Folder, Store } from '../../types'
 import type { AccountState } from '../account/account'
 import type { DocMeta } from '../docMeta'
-import type { DocUnit } from '../docUnit'
-import { openE2eeIds } from '../paneRules'
+import type { DocUnit } from '../session/docUnit'
+import { openE2eeIds } from '../panes/paneRules'
 import type { NoticeWithAction } from '../NoticeBar'
 import type { UseE2ee } from './useE2ee'
 

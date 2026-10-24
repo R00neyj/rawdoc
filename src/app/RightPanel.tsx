@@ -10,7 +10,7 @@ import CalendarDayDocs, { type DayDocsCollapse } from './CalendarDayDocs'
 import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'
 import type { DocGraphView, DocLinksView, DocTodosView } from './usePanelDocs'
-import type { PhoneSideSections } from './usePhoneSidePanel'
+import type { PhoneSideSections } from './phone/usePhoneSidePanel'
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 

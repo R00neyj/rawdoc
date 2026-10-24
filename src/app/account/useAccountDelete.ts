@@ -14,7 +14,7 @@ import {
   resumeMarker,
 } from './accountDelete'
 import type { NoticeWithAction } from '../NoticeBar'
-import type { SettingsAccount } from '../SettingsDialog'
+import type { SettingsAccount } from '../settings/SettingsDialog'
 import type { UseE2ee } from '../vault/useE2ee'
 import type { SyncState } from '../../types'
 

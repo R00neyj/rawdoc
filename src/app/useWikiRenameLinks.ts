@@ -16,7 +16,7 @@ import {
 import { displayDocTitle, type DocMeta } from './docMeta'
 import type { EditorHandle } from '../editor/Editor'
 import type { NoticeWithAction } from './NoticeBar'
-import type { PaneHost } from './usePaneHost'
+import type { PaneHost } from './panes/usePaneHost'
 import type { WikiRenameDialogData } from './WikiRenameDialog'
 import type { Folder, Store } from '../types'
 

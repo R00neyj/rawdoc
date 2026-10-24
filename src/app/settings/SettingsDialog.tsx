@@ -1,0 +1,938 @@
+import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import Dialog from '../Dialog'
+import SettingsPageShell from './SettingsPageShell'
+import { openDonateDialog } from '../donateStore'
+import { usePhoneWidth } from '../phone/usePhoneWidth'
+import { useSettingsPages } from './useSettingsPages'
+import { settingsPagesMode } from './settingsPages'
+import PushSettings from '../PushSettings'
+import GithubSettings from '../github/GithubSettings'
+import UserCssTab from '../UserCssTab'
+import ConnectedAppsTab from '../account/ConnectedAppsTab'
+import type { PushSettingsView } from '../pushClient'
+import type { GithubStatus } from '../../lib/github/githubContract'
+import { WELCOME_PATH } from '../../lib/siteChrome'
+import { visibleSettingsTabs, nextTabIndex, groupSettingsTabs, settingsTabGroupLabel, type SettingsTabId } from './settingsTabs'
+import SettingsCard from './SettingsCard'
+import { IconAccount, IconClose, IconGuide, IconKanban, IconLock, IconNoteAdd, IconRaw, IconRightPanelOpen, IconScreen, IconSwap } from '../icons'
+import type { TemplateEntry } from '../../lib/templates'
+import TemplateSelectField from '../TemplateSelectField'
+import DocPickerDialog from './DocPickerDialog'
+import type { PickerDoc } from './docPicker'
+import RightPanelSettingsTab, { type RightPanelSettings } from './RightPanelSettingsTab'
+import KanbanSettingsTab from '../kanban/KanbanSettingsTab'
+import type { KanbanSettings } from '../kanban/useKanbanSettings'
+import LocalFileOpenSetting from '../localFile/LocalFileOpenSetting'
+import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../../e2ee/keyring'
+import { changeLineBreaks, useLineBreaks } from '../appearance/lineBreaksPref'
+import { THEME_OPTIONS } from '../appearance/theme'
+import { DEFAULT_VIEW_OPTIONS } from '../appearance/defaultView'
+import {
+  MIN_CONTENT_WIDTH,
+  MAX_CONTENT_WIDTH,
+  CONTENT_WIDTH_STEP,
+  parseContentWidthInput,
+  exactContentWidthInput,
+} from '../appearance/contentWidth'
+
+// 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
+
+// 제목·본문 서체가 같은 버튼 순서를 쓴다 (F-141 3.2)
+const FONT_OPTIONS = [
+  { value: 'serif', label: '세리프', fontVar: '--font-serif' },
+  { value: 'sans', label: '산세리프', fontVar: '--font-sans' },
+] as const
+
+// 글자 크기 (F-154 2.2)
+const FONT_SIZE_OPTIONS = [
+  { value: 'small', label: '작게' },
+  { value: 'medium', label: '보통' },
+  { value: 'large', label: '크게' },
+] as const
+
+// 들여쓰기 칸 수 (F-154 2.3)
+const INDENT_OPTIONS = [
+  { value: '2', label: '2칸' },
+  { value: '4', label: '4칸' },
+] as const
+
+// 시작 화면 — 홈이 기본, 마지막 문서·지정 문서를 고르면 부팅 때 자동으로 연다 (F-232 3.4, small 2026-10-14)
+const START_SCREEN_OPTIONS = [
+  { value: 'home', label: '홈' },
+  { value: 'last', label: '마지막 문서' },
+  { value: 'doc', label: '문서 지정' },
+] as const
+
+// 줄 번호(거터) 켜기·끄기 (F-147 2장)
+const LINE_NUMBERS_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+] as const
+
+// 상단바 서식·단락·삽입 탭바 켜기·끄기 (F-233 3.5)
+const TOOLBAR_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+] as const
+
+// 위키링크 미리보기 켜기·끄기 (F-2044 8.2)
+const WIKI_PREVIEW_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+] as const
+
+// 한 번 줄바꿈도 줄을 바꿔 보이기 (small 2026-10-22)
+const LINE_BREAKS_OPTIONS = [
+  { value: 'on', label: '켬' },
+  { value: 'off', label: '끔' },
+] as const
+
+// 왼쪽 목록 9묶음 — 배치는 A안 (specs/wireframes/settings-redesign.html, small 2026-10-22)
+const TAB_LABELS: Record<SettingsTabId, string> = {
+  screen: '화면',
+  css: '사용자 CSS',
+  writing: '쓰기·읽기',
+  start: '시작·새 문서',
+  rightPanel: '오른쪽 패널',
+  kanban: '칸반',
+  data: '가져오기·내보내기',
+  e2ee: '금고',
+  account: '계정',
+}
+
+const TAB_ICONS: Record<SettingsTabId, typeof IconScreen> = {
+  screen: IconScreen,
+  css: IconRaw,
+  writing: IconGuide,
+  start: IconNoteAdd,
+  rightPanel: IconRightPanelOpen,
+  kanban: IconKanban,
+  data: IconSwap,
+  e2ee: IconLock,
+  account: IconAccount,
+}
+
+// `계정` 탭 — 로그인(또는 오프라인이고 저장된 계정)일 때만 App 이 준다 (F-2038.md 6.1)
+export type SettingsAccount = {
+  email: string
+  online: boolean
+  onDelete: () => void
+}
+
+// `계정` 탭 `알림` 묶음 — 안 주면 그리지 않는다 (F-2110 6.1)
+export type SettingsPush = {
+  view: PushSettingsView
+  onShown: () => void
+  onToggle: () => void
+  onTest: () => void
+}
+
+// `계정` 탭 `GitHub` 묶음 — 기능이 켜졌을 때만 준다 (F-2128 4.6)
+export type SettingsGithub = {
+  status: GithubStatus | null
+  online: boolean
+  onShown: () => void
+  onConnect: () => void
+  onDisconnect: () => void
+}
+
+// 시작 화면 `문서 지정` 의 문서 — 앱만 준다 (small 2026-10-14)
+export type SettingsStartDoc = {
+  docId: string
+  docs: readonly PickerDoc[]
+  onChange: (id: string) => void
+}
+
+// 자동 잠금 세그먼트 — 값은 분 문자열 (F-404.md 7.5·8.1)
+const E2EE_LOCK_MINUTES_OPTIONS = E2EE_LOCK_MINUTES.map((m) => ({
+  value: String(m),
+  label: m === 60 ? '1시간' : m === 240 ? '4시간' : `${m}분`,
+}))
+
+const E2EE_STATUS_TEXT: Record<E2eeStatus, string> = {
+  unknown: '불러오는 중…',
+  loading: '불러오는 중…',
+  unavailable: '금고 정보를 불러오지 못했습니다.',
+  none: '아직 금고가 없습니다.',
+  locked: '금고가 잠겨 있습니다.',
+  open: '이 탭에서 금고가 열려 있습니다.',
+}
+
+export type SettingsE2ee = {
+  status: E2eeStatus
+  isLocal: boolean
+  lockMinutes: string
+  onChangeLockMinutes: (value: string) => void
+  onShown: () => void
+  onCreate: () => void
+  onUnlock: () => void
+  onChangePassword: () => void
+  onReset: () => void
+  onLockNow: () => void
+  onRetry: () => void
+}
+
+type SegmentOption = { value: string; label: string; fontVar?: string }
+
+type SegmentProps<T extends string> = {
+  labelId: string
+  label: string
+  value: T
+  options: readonly SegmentOption[]
+  onChange: (value: T) => void
+  useFontPreview?: boolean
+  checkedRef?: RefObject<HTMLButtonElement | null>
+  // 켜기/끄기 — 라벨과 컨트롤을 한 줄에 (A안)
+  inline?: boolean
+}
+
+function Segment<T extends string>({
+  labelId,
+  label,
+  value,
+  options,
+  onChange,
+  useFontPreview,
+  checkedRef,
+  inline,
+}: SegmentProps<T>) {
+  const checkedIndex = options.findIndex((opt) => opt.value === value)
+  // 라디오 그룹은 탭 한 번에 들어가고 방향키·Home·End 로 고른다 (WAI-ARIA radio 패턴)
+  function handleKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const current = Math.max(checkedIndex, 0)
+    const next = nextTabIndex(current, options.length, e.key)
+    if (next === current) return
+    e.preventDefault()
+    onChange(options[next].value as T)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus()
+  }
+  return (
+    <div className={inline ? 'dialog-field dialog-field--inline' : 'dialog-field'}>
+      <span id={labelId}>{label}</span>
+      <div className="seg" role="radiogroup" aria-labelledby={labelId} onKeyDown={handleKeyDown}>
+        {options.map((opt, i) => {
+          const checked = value === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              tabIndex={checked || (checkedIndex < 0 && i === 0) ? 0 : -1}
+              ref={checked ? checkedRef : undefined}
+              style={useFontPreview ? { fontFamily: `var(${opt.fontVar})` } : undefined}
+              onClick={() => onChange(opt.value as T)}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// 지정 문서 제목 — 지워졌거나 잠긴 금고 문서면 부팅 때 홈으로 간다는 것을 그대로 보인다 (small 2026-10-14)
+function StartDocRow({ startDoc, onPick }: { startDoc: SettingsStartDoc; onPick: () => void }) {
+  const doc = startDoc.docs.find((d) => d.id === startDoc.docId)
+  const title = !doc ? '고른 문서 없음' : doc.e2ee === 'locked' ? '잠긴 금고 문서' : doc.title || '제목 없는 문서'
+  return (
+    <p className="settings-start-doc">
+      <span className={`settings-start-doc-title${doc && doc.e2ee !== 'locked' ? '' : ' settings-start-doc-title--none'}`}>
+        {title}
+      </span>
+      <button type="button" className="dialog-btn" onClick={onPick}>
+        문서 고르기…
+      </button>
+    </p>
+  )
+}
+
+// 본문 너비 — 슬라이더 + 숫자 입력, 서로 동기. 입력에 id 가 없는 이유는 라벨 세기 선택자 때문이다 (F-2043 4장)
+function ContentWidthField({ value, onChange }: { value: number; onChange: (px: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  // 밖(슬라이더)에서 값이 바뀌면 초안도 그 값의 문자열로 — 렌더 중 조정(F-290 의 openSeen 방식과 같다, F-2043 4.3)
+  const [valueSeen, setValueSeen] = useState(value)
+  if (value !== valueSeen) {
+    setValueSeen(value)
+    setDraft(String(value))
+  }
+
+  function commit(raw: string) {
+    const parsed = parseContentWidthInput(raw)
+    if (parsed === null) {
+      setDraft(String(value)) // 빈 값·숫자 아님 — 되돌린다(저장 안 함)
+      return
+    }
+    onChange(parsed)
+    setDraft(String(parsed))
+  }
+
+  return (
+    <div className="dialog-field">
+      <span id="content-width-label">본문 너비</span>
+      <div className="settings-range">
+        <input
+          type="range"
+          min={MIN_CONTENT_WIDTH}
+          max={MAX_CONTENT_WIDTH}
+          step={CONTENT_WIDTH_STEP}
+          aria-labelledby="content-width-label"
+          aria-valuetext={`${value}px`}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <input
+          type="number"
+          min={MIN_CONTENT_WIDTH}
+          max={MAX_CONTENT_WIDTH}
+          step={CONTENT_WIDTH_STEP}
+          inputMode="numeric"
+          aria-labelledby="content-width-label"
+          value={draft}
+          onChange={(e) => {
+            const raw = e.target.value
+            setDraft(raw)
+            const exact = exactContentWidthInput(raw)
+            if (exact !== null) onChange(exact)
+          }}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commit(e.currentTarget.value)
+            } else if (e.key === 'Escape') {
+              // 이벤트를 막지 않는다 — 대화상자는 평소대로 닫힌다 (F-2043 4.3)
+              setDraft(String(value))
+            }
+          }}
+        />
+        <span aria-hidden="true">px</span>
+      </div>
+    </div>
+  )
+}
+
+type SettingsDialogProps = {
+  open: boolean
+  theme: string
+  onChangeTheme: (value: string) => void
+  headingFont: string
+  onChangeHeadingFont: (value: string) => void
+  bodyFont: string
+  onChangeBodyFont: (value: string) => void
+  fontSize: string
+  onChangeFontSize: (value: string) => void
+  startScreen?: string
+  onChangeStartScreen?: (value: string) => void
+  startDoc?: SettingsStartDoc
+  defaultView?: string
+  onChangeDefaultView?: (value: string) => void
+  // `쓰기·읽기` — 위키링크 미리보기 (F-2044.md 8.2). 둘 다 있을 때만 그린다
+  wikiPreview?: string
+  onChangeWikiPreview?: (value: string) => void
+  // 한 번 줄바꿈 — 내 앱 화면에서만 준다(공개 보기는 기본값 고정, small 2026-10-22)
+  showLineBreaks?: boolean
+  toolbar?: string
+  onChangeToolbar?: (value: string) => void
+  indent?: string
+  onChangeIndent?: (value: string) => void
+  lineNumbers?: string
+  onChangeLineNumbers?: (value: string) => void
+  // `화면` 화면 요소 — 본문 너비 (F-2043.md 4장). 둘 다 있을 때만 그린다
+  contentWidth?: number
+  onChangeContentWidth?: (px: number) => void
+  // `시작·새 문서` — 새 문서 템플릿 (F-2037.md 3.2). 안 주면 선택칸을 그리지 않는다(공개 보기 화면)
+  newDocTemplate?: string
+  onChangeNewDocTemplate?: (value: string) => void
+  templateEntries?: readonly TemplateEntry[]
+  // 새 문서 템플릿 아래 `템플릿 관리…` 버튼
+  onOpenTemplates?: () => void
+  // `오른쪽 패널` 탭 — 안 주면 탭을 그리지 않는다(공개 보기 화면)
+  rightPanel?: RightPanelSettings
+  // `칸반` 탭 — 안 주면 탭을 그리지 않는다(공개 보기 화면)
+  kanban?: KanbanSettings
+  // 열 때 고를 탭 — 없거나 안 보이는 탭이면 첫 탭
+  initialTab?: SettingsTabId | null
+  // `가져오기·내보내기` — 전체 내보내기 (F-281.md 3.6). 안 주면 묶음을 그리지 않는다(공개 보기 화면)
+  onExportAll?: () => void
+  exportAllDisabled?: boolean
+  // 옵시디언 볼트로 내보내기 (F-2020.md 6.1). 있을 때만 버튼을 그린다
+  onExportVault?: () => void
+  // 가져오기 (F-282.md 3.1). onExportAll 이 있을 때만 의미가 있다(같은 묶음)
+  onImport?: () => void
+  // 폴더 가져오기(볼트) (F-2019.md 10.1). 있을 때만 버튼을 그린다
+  onImportFolder?: () => void
+  // `금고` 탭 — 3.1 범위가 있을 때만 준다. 안 주면 탭이 안 보인다 (F-404.md 7.5)
+  e2ee?: SettingsE2ee
+  // `사용자 CSS` 탭 — 앱(공개 보기 아님)만 준다, 로그인하면 accountId (F-2099.md 5장)
+  userCss?: { accountId: string | null }
+  // `계정` — 로그인했을 때 (F-2038.md 6.1)
+  account?: SettingsAccount
+  // `계정` 탭 `알림` 묶음 — account 와 함께 있을 때만 그린다 (F-2110 6.1)
+  push?: SettingsPush
+  // `계정` 탭 `GitHub` 묶음 — 안 주면 그리지 않는다 (F-2128 4.6)
+  github?: SettingsGithub
+  // 로그아웃이면 `계정` 묶음에 로그인 안내와 버튼만 (small 2026-10-22)
+  onSignIn?: () => void
+  onOpen?: () => void
+  onClose: () => void
+}
+
+export default function SettingsDialog({
+  open,
+  theme,
+  onChangeTheme,
+  headingFont,
+  onChangeHeadingFont,
+  bodyFont,
+  onChangeBodyFont,
+  fontSize,
+  onChangeFontSize,
+  startScreen,
+  onChangeStartScreen,
+  startDoc,
+  defaultView,
+  onChangeDefaultView,
+  wikiPreview,
+  onChangeWikiPreview,
+  showLineBreaks,
+  toolbar,
+  onChangeToolbar,
+  indent,
+  onChangeIndent,
+  lineNumbers,
+  onChangeLineNumbers,
+  contentWidth,
+  onChangeContentWidth,
+  newDocTemplate,
+  onChangeNewDocTemplate,
+  templateEntries,
+  onOpenTemplates,
+  rightPanel,
+  kanban,
+  initialTab,
+  onExportAll,
+  exportAllDisabled,
+  onExportVault,
+  onImport,
+  onImportFolder,
+  e2ee,
+  userCss,
+  account,
+  push,
+  github,
+  onSignIn,
+  onOpen,
+  onClose,
+}: SettingsDialogProps) {
+  const titleId = 'settings-title'
+  const checkedRef = useRef<HTMLButtonElement | null>(null) // 탭이 없을 때 초점: 테마의 현재 선택 버튼 (3.3)
+  const activeTabButtonRef = useRef<HTMLButtonElement | null>(null) // 탭이 있을 때 초점: 활성 탭 버튼
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const phone = usePhoneWidth()
+  const [docPickerOpen, setDocPickerOpen] = useState(false)
+  const lineBreaks = useLineBreaks()
+
+  // 공개 보기 화면은 편집 항목을 안 준다 — 줄 때만 그린다 (F-230 2.2)
+  const hasContentWidth = contentWidth !== undefined && onChangeContentWidth !== undefined
+  const hasToolbar = toolbar !== undefined && onChangeToolbar !== undefined
+  const hasLineNumbers = lineNumbers !== undefined && onChangeLineNumbers !== undefined
+  const hasIndent = indent !== undefined && onChangeIndent !== undefined
+  const hasWikiPreview = wikiPreview !== undefined && onChangeWikiPreview !== undefined
+  const hasStartScreen = startScreen !== undefined && onChangeStartScreen !== undefined
+  const hasDefaultView = defaultView !== undefined && onChangeDefaultView !== undefined
+  const hasTemplate = newDocTemplate !== undefined && onChangeNewDocTemplate !== undefined
+
+  const tabs = visibleSettingsTabs({
+    screen: true,
+    css: userCss !== undefined,
+    writing: hasIndent || hasWikiPreview || showLineBreaks === true,
+    start: hasStartScreen || hasDefaultView || hasTemplate,
+    rightPanel: rightPanel !== undefined,
+    kanban: kanban !== undefined,
+    data: onExportAll !== undefined,
+    e2ee: e2ee !== undefined,
+    account: account !== undefined || onSignIn !== undefined,
+  })
+  const openTab = initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]
+
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(openTab)
+  const [openSeen, setOpenSeen] = useState(open)
+
+  // 대화상자를 다시 열 때마다 첫 탭(화면)이나 요청한 탭으로 되돌린다 — 렌더 중에 조정해 Dialog 의 초점 이펙트보다 먼저 반영한다 (F-290.md 3.7)
+  let resolvedActiveTab = tabs.includes(activeTab) ? activeTab : tabs[0]
+  if (open !== openSeen) {
+    setOpenSeen(open)
+    if (open) {
+      resolvedActiveTab = openTab
+      if (activeTab !== openTab) setActiveTab(openTab)
+    }
+  }
+
+  const pagesMode = settingsPagesMode(phone, tabs.length)
+  const pages = useSettingsPages({ open, enabled: pagesMode, tabs, initialTab: openTab === tabs[0] ? null : openTab, onOpen, onClose })
+  const [pagesSeen, setPagesSeen] = useState(pagesMode)
+  if (pagesMode !== pagesSeen) {
+    setPagesSeen(pagesMode)
+    if (!pagesMode && open && pages.page !== null && pages.page !== 'list') {
+      resolvedActiveTab = pages.page
+      setActiveTab(pages.page)
+    }
+  }
+  const pageTab = pages.page !== null && pages.page !== 'list' ? pages.page : null
+  const visibleTab = pagesMode ? pageTab : resolvedActiveTab
+
+  function handleTabKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const current = tabs.indexOf(resolvedActiveTab)
+    const next = nextTabIndex(current, tabs.length, e.key)
+    if (next === current) return
+    e.preventDefault()
+    setActiveTab(tabs[next])
+    tabRefs.current[next]?.focus()
+  }
+
+  // 금고 탭이 보이게 될 때마다(누르거나 방향키로 옮겨 올 때) 3.2 ① 읽기를 부른다 (F-404.md 7.5)
+  useEffect(() => {
+    if (open && visibleTab === 'e2ee') e2ee?.onShown()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, visibleTab])
+
+  // 계정 탭이 보일 때마다 푸시 상태를 다시 읽는다 (F-2110 6.1)
+  useEffect(() => {
+    if (open && visibleTab === 'account') {
+      push?.onShown()
+      github?.onShown()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, visibleTab])
+
+  function fieldsForTab(id: SettingsTabId): ReactNode {
+    if (id === 'screen') {
+      return (
+        <>
+          <SettingsCard>
+            <Segment
+              labelId="theme-label"
+              label="테마"
+              value={theme}
+              options={THEME_OPTIONS}
+              onChange={onChangeTheme}
+              checkedRef={checkedRef}
+            />
+          </SettingsCard>
+          <SettingsCard title="글자">
+            <Segment
+              labelId="heading-font-label"
+              label="제목 서체"
+              value={headingFont}
+              options={FONT_OPTIONS}
+              onChange={onChangeHeadingFont}
+              useFontPreview
+            />
+            <Segment
+              labelId="body-font-label"
+              label="본문 서체"
+              value={bodyFont}
+              options={FONT_OPTIONS}
+              onChange={onChangeBodyFont}
+              useFontPreview
+            />
+            <Segment
+              labelId="font-size-label"
+              label="글자 크기"
+              value={fontSize}
+              options={FONT_SIZE_OPTIONS}
+              onChange={onChangeFontSize}
+            />
+          </SettingsCard>
+          {(hasContentWidth || hasToolbar || hasLineNumbers) && (
+            <SettingsCard title="화면 요소">
+              {contentWidth !== undefined && onChangeContentWidth !== undefined && <ContentWidthField value={contentWidth} onChange={onChangeContentWidth} />}
+              {/* 공개 읽기전용 화면(F-230)에는 편집 명령이 없어 이 항목을 안 준다 (F-233 3.5) */}
+              {toolbar !== undefined && onChangeToolbar !== undefined && (
+                <Segment labelId="toolbar-label" label="탭바" value={toolbar} options={TOOLBAR_OPTIONS} onChange={onChangeToolbar} inline />
+              )}
+              {lineNumbers !== undefined && onChangeLineNumbers !== undefined && (
+                <Segment
+                  labelId="line-numbers-label"
+                  label="줄 번호"
+                  value={lineNumbers}
+                  options={LINE_NUMBERS_OPTIONS}
+                  onChange={onChangeLineNumbers}
+                  inline
+                />
+              )}
+            </SettingsCard>
+          )}
+        </>
+      )
+    }
+    if (id === 'writing') {
+      return (
+        <>
+          {indent !== undefined && onChangeIndent !== undefined && (
+            <SettingsCard title="입력">
+              <Segment labelId="indent-label" label="들여쓰기" value={indent} options={INDENT_OPTIONS} onChange={onChangeIndent} />
+            </SettingsCard>
+          )}
+          {(showLineBreaks || hasWikiPreview) && (
+            <SettingsCard title="해석·표시">
+              {showLineBreaks && (
+                <>
+                  <Segment
+                    labelId="line-breaks-label"
+                    label="줄바꿈 한 번도 줄을 바꿔 보이기"
+                    value={lineBreaks ? 'on' : 'off'}
+                    options={LINE_BREAKS_OPTIONS}
+                    onChange={(v) => changeLineBreaks(v === 'on')}
+                    inline
+                  />
+                  <p className="dialog-note">끄면 마크다운 표준대로 빈 줄이 있어야 문단이 나뉩니다. 보기 모드와 HTML·PDF 내보내기·인쇄에 쓰입니다.</p>
+                </>
+              )}
+              {wikiPreview !== undefined && onChangeWikiPreview !== undefined && (
+                <Segment
+                  labelId="wiki-preview-label"
+                  label="위키링크 미리보기"
+                  value={wikiPreview}
+                  options={WIKI_PREVIEW_OPTIONS}
+                  onChange={onChangeWikiPreview}
+                  inline
+                />
+              )}
+            </SettingsCard>
+          )}
+        </>
+      )
+    }
+    if (id === 'start') {
+      return (
+        <>
+          {(hasStartScreen || hasDefaultView) && (
+            <SettingsCard title="앱을 열 때">
+              {/* 로그인/로컬 앱 전용 — PublicView 는 목록·홈 개념이 없어 이 항목을 안 준다 (F-232 3.4) */}
+              {startScreen !== undefined && onChangeStartScreen !== undefined && (
+                <Segment
+                  labelId="start-screen-label"
+                  label="시작 화면"
+                  value={startScreen}
+                  options={START_SCREEN_OPTIONS}
+                  onChange={onChangeStartScreen}
+                />
+              )}
+              {startScreen === 'doc' && startDoc && <StartDocRow startDoc={startDoc} onPick={() => setDocPickerOpen(true)} />}
+              {defaultView !== undefined && onChangeDefaultView !== undefined && (
+                <Segment
+                  labelId="default-view-label"
+                  label="기본 뷰"
+                  value={defaultView}
+                  options={DEFAULT_VIEW_OPTIONS}
+                  onChange={onChangeDefaultView}
+                />
+              )}
+            </SettingsCard>
+          )}
+          {newDocTemplate !== undefined && onChangeNewDocTemplate !== undefined && (
+            <SettingsCard title="새 문서">
+              <TemplateSelectField
+                idBase="new-doc-template"
+                label="새 문서 템플릿"
+                value={newDocTemplate}
+                entries={templateEntries ?? []}
+                onChange={onChangeNewDocTemplate}
+              />
+              {onOpenTemplates && (
+                <p className="settings-template-manage">
+                  <button type="button" className="dialog-btn" onClick={onOpenTemplates}>
+                    템플릿 관리…
+                  </button>
+                </p>
+              )}
+            </SettingsCard>
+          )}
+          <LocalFileOpenSetting />
+        </>
+      )
+    }
+    if (id === 'rightPanel' && rightPanel) return <RightPanelSettingsTab settings={rightPanel} entries={templateEntries ?? []} />
+    if (id === 'kanban' && kanban) return <KanbanSettingsTab settings={kanban} />
+    if (id === 'css' && userCss) {
+      return (
+        <SettingsCard title="스니펫">
+          <UserCssTab key={userCss.accountId ?? ''} accountId={userCss.accountId} />
+        </SettingsCard>
+      )
+    }
+    if (id === 'data') {
+      // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 버튼마다 한 줄 설명(tweak 2026-09-26)
+      return (
+        <>
+          <SettingsCard title="내보내기">
+            <div className="data-grid">
+              <div className="data-row">
+                <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
+                  전체 내보내기
+                </button>
+                <p className="data-row-desc">모든 문서·폴더·이미지를 zip 하나로 받습니다. 이 앱의 가져오기로 다시 들일 수 있습니다</p>
+              </div>
+              {onExportVault && (
+                <div className="data-row">
+                  <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
+                    옵시디언 볼트로 내보내기
+                  </button>
+                  <p className="data-row-desc">옵시디언에서 바로 열 수 있는 폴더 구조의 zip 으로 받습니다</p>
+                </div>
+              )}
+              {exportAllDisabled && <p className="dialog-note data-row-note">온라인일 때 내보낼 수 있습니다</p>}
+            </div>
+          </SettingsCard>
+          {(onImport || onImportFolder) && (
+            <SettingsCard title="가져오기">
+              <div className="data-grid">
+                {onImport && (
+                  <div className="data-row">
+                    <button type="button" className="dialog-btn" onClick={onImport}>
+                      가져오기…
+                    </button>
+                    <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, Notion 내보내기 zip, .md 파일을 모은 zip 을 가져옵니다</p>
+                  </div>
+                )}
+                {onImportFolder && (
+                  <div className="data-row">
+                    <button type="button" className="dialog-btn" onClick={onImportFolder}>
+                      폴더 가져오기…
+                    </button>
+                    <p className="data-row-desc">옵시디언 볼트 같은 폴더를 골라 폴더 구조 그대로 가져옵니다</p>
+                  </div>
+                )}
+              </div>
+            </SettingsCard>
+          )}
+        </>
+      )
+    }
+    // account — 계정 (F-2038.md 6.1). 로그아웃이면 로그인 안내만 (small 2026-10-22)
+    if (id === 'account') {
+      if (!account) {
+        return (
+          <SettingsCard title="로그인">
+            <p className="dialog-note">로그인하면 알림·GitHub·연결된 앱을 쓸 수 있고, 문서를 계정에 저장해 다른 기기에서도 엽니다.</p>
+            <div className="dialog-btn-row">
+              <button type="button" className="dialog-btn" onClick={onSignIn}>
+                로그인
+              </button>
+            </div>
+          </SettingsCard>
+        )
+      }
+      return (
+        <>
+          <SettingsCard title="로그인">
+            <p className="dialog-note settings-account-email">{account.email} 로 로그인했습니다.</p>
+          </SettingsCard>
+          {push && <PushSettings push={push} />}
+          <SettingsCard title="연결">
+            {github && <GithubSettings github={github} />}
+            <ConnectedAppsTab online={account.online} />
+          </SettingsCard>
+          <SettingsCard title="위험">
+            <div className="dialog-btn-row">
+              <button type="button" className="dialog-btn danger" onClick={account.onDelete} disabled={!account.online}>
+                계정 삭제…
+              </button>
+              {!account.online && <span className="dialog-note">온라인일 때 계정을 삭제할 수 있습니다</span>}
+            </div>
+            <p className="dialog-note settings-account-note">계정과 서버에 저장한 문서·폴더·이미지·공유 링크·API 토큰을 모두 지웁니다. 되돌릴 수 없습니다.</p>
+          </SettingsCard>
+        </>
+      )
+    }
+    // e2ee — 금고 (F-404.md 7.5)
+    if (!e2ee) return null
+    return (
+      <>
+        <SettingsCard title="상태">
+          <p className="dialog-note settings-e2ee-state">{E2EE_STATUS_TEXT[e2ee.status]}</p>
+          {e2ee.isLocal && e2ee.status !== 'none' && (
+            <p className="dialog-callout">이 금고는 이 브라우저에만 있습니다. 로그인하면 계정 금고로 옮길 수 있습니다.</p>
+          )}
+          <div className="dialog-btn-row">
+            {e2ee.status === 'unavailable' && (
+              <button type="button" className="dialog-btn" onClick={e2ee.onRetry}>
+                다시 시도
+              </button>
+            )}
+            {e2ee.status === 'none' && (
+              <button type="button" className="dialog-btn" onClick={e2ee.onCreate}>
+                금고 만들기…
+              </button>
+            )}
+            {e2ee.status === 'locked' && (
+              <>
+                <button type="button" className="dialog-btn" onClick={e2ee.onUnlock}>
+                  금고 열기…
+                </button>
+                <button type="button" className="dialog-btn" onClick={e2ee.onChangePassword}>
+                  암호 바꾸기…
+                </button>
+                <button type="button" className="dialog-btn" onClick={e2ee.onReset}>
+                  금고 초기화…
+                </button>
+              </>
+            )}
+            {e2ee.status === 'open' && (
+              <>
+                <button type="button" className="dialog-btn" onClick={e2ee.onLockNow}>
+                  지금 잠그기
+                </button>
+                <button type="button" className="dialog-btn" onClick={e2ee.onChangePassword}>
+                  암호 바꾸기…
+                </button>
+                <button type="button" className="dialog-btn" onClick={e2ee.onReset}>
+                  금고 초기화…
+                </button>
+              </>
+            )}
+          </div>
+        </SettingsCard>
+        <SettingsCard title="잠금">
+          <Segment
+            labelId="e2ee-lock-minutes-label"
+            label="자동 잠금"
+            value={e2ee.lockMinutes}
+            options={E2EE_LOCK_MINUTES_OPTIONS}
+            onChange={e2ee.onChangeLockMinutes}
+          />
+        </SettingsCard>
+      </>
+    )
+  }
+
+  // 설정 <dialog> 밖 형제로 둔다 — 안에 두면 설정 패널 CSS 가 섞인다 (small 2026-10-14)
+  const docPicker = startDoc && (
+    <DocPickerDialog
+      open={open && docPickerOpen}
+      docs={startDoc.docs}
+      onPick={(id) => {
+        startDoc.onChange(id)
+        setDocPickerOpen(false)
+      }}
+      onClose={() => setDocPickerOpen(false)}
+    />
+  )
+
+  if (pagesMode) {
+    return (
+      <>
+        <Dialog open={open} onClose={onClose} titleId={titleId} size="full" initialFocusRef={activeTabButtonRef} onCancel={pages.onCancel}>
+          <SettingsPageShell
+            titleId={titleId}
+            page={pages.page}
+            tabs={tabs}
+            labels={TAB_LABELS}
+            firstRowRef={activeTabButtonRef}
+            onEnter={pages.enter}
+            onBack={pages.back}
+            onClose={pages.close}
+          >
+            {pageTab !== null && fieldsForTab(pageTab)}
+          </SettingsPageShell>
+        </Dialog>
+        {docPicker}
+      </>
+    )
+  }
+
+  // 소개·후원 — 왼쪽 목록 아래 (F-2051, tweak 2026-09-28, small 2026-10-22)
+  const navFoot = (
+    <div className="settings-nav-foot">
+      <a className="settings-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
+        소개 보기
+      </a>
+      <button type="button" className="settings-donate" onClick={openDonateDialog}>
+        후원하기
+      </button>
+    </div>
+  )
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        titleId={titleId}
+        size="xwide"
+        initialFocusRef={tabs.length > 1 ? activeTabButtonRef : checkedRef}
+      >
+        <div className="settings-head">
+          <h2 id={titleId}>설정</h2>
+          <button type="button" className="icon-btn settings-close" aria-label="닫기" onClick={onClose}>
+            <IconClose size={18} />
+          </button>
+        </div>
+        {tabs.length > 1 ? (
+          <div className="settings-body">
+            <div
+              className="settings-tabs"
+              role="tablist"
+              aria-label="설정 분류"
+              aria-orientation="vertical"
+              onKeyDown={handleTabKeyDown}
+            >
+              {groupSettingsTabs(tabs).map((group) => (
+                <Fragment key={group.label}>
+                  {/* 상위 이름은 눈으로 묶음만 보인다 — 탭 목록의 탭 수에 안 든다 */}
+                  <span className="settings-tabs-group" aria-hidden="true">
+                    {group.label}
+                  </span>
+                  {group.tabs.map((id) => {
+                    const i = tabs.indexOf(id)
+                    const selected = id === resolvedActiveTab
+                    const TabIcon = TAB_ICONS[id]
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        id={`settings-tab-${id}`}
+                        aria-selected={selected}
+                        aria-controls={`settings-panel-${id}`}
+                        tabIndex={selected ? 0 : -1}
+                        ref={(el) => {
+                          tabRefs.current[i] = el
+                          if (selected) activeTabButtonRef.current = el
+                        }}
+                        onClick={() => setActiveTab(id)}
+                      >
+                        <TabIcon size={16} />
+                        {TAB_LABELS[id]}
+                      </button>
+                    )
+                  })}
+                </Fragment>
+              ))}
+            </div>
+            {/* 탭 목록에서 Tab 은 패널로 가야 해 DOM 은 패널 뒤, 자리는 격자로 목록 아래 (F-290 A7) */}
+            <div
+              className="settings-panel"
+              role="tabpanel"
+              id={`settings-panel-${resolvedActiveTab}`}
+              aria-labelledby={`settings-tab-${resolvedActiveTab}`}
+            >
+              <p className="settings-panel-group">{settingsTabGroupLabel(resolvedActiveTab)}</p>
+              <h3 className="settings-panel-title">{TAB_LABELS[resolvedActiveTab]}</h3>
+              {fieldsForTab(resolvedActiveTab)}
+            </div>
+            {navFoot}
+          </div>
+        ) : (
+          <div className="settings-single">
+            {fieldsForTab(tabs[0])}
+            {navFoot}
+          </div>
+        )}
+      </Dialog>
+      {docPicker}
+    </>
+  )
+}

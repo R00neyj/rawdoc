@@ -1,7 +1,7 @@
 // 공개 사이트·랜딩 첫 칠 전 테마 스크립트 — 앱 resolveTheme 과 같은 규칙 (small change 2026-10-12)
 import { describe, expect, test } from 'vitest'
 import { LANDING_THEME_SCRIPT, SITE_THEME_SCRIPT } from '../../../src/lib/pageTheme'
-import { resolveTheme } from '../../../src/app/theme'
+import { resolveTheme } from '../../../src/app/appearance/theme'
 
 type RunOptions = { pref?: string; dark: boolean; throwStorage?: boolean; throwMedia?: boolean }
 

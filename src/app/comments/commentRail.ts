@@ -1,7 +1,7 @@
 // 댓글 레일·판 순수 함수 — 권한·정렬·판정·시각. DOM·React 없음 (specs/features/F-505.md 3.1)
 import type { CommentActor, CommentAuthor } from '../../lib/comments/docComments'
 import type { DocPathKind } from '../docPath'
-import type { LivePhase } from '../liveDoc'
+import type { LivePhase } from '../session/liveDoc'
 
 export const COMMENT_RAIL_WIDTH = 280 // px (F-500 4.3)
 export const COMMENT_RAIL_MIN_MAIN = 968 // px, 메인 열 폭이 이 값 이상이면 레일 (640 + 280 + 48)

@@ -23,7 +23,7 @@ import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from '../usePresence'
 import { loadMapGroups, loadMapView, saveMapGroups, saveMapView, type MapGroup, type MapView } from './mapPrefs'
 import FolderMenu from '../FolderMenu'
-import { openDocInNewTab } from '../openInNewTab'
+import { openDocInNewTab } from '../panes/openInNewTab'
 import type { Doc, Folder } from '../../types'
 
 const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
