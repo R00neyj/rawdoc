@@ -124,6 +124,10 @@ rawdoc put <id> 파일.md --base-version auto
 
 `logout` 은 이 컴퓨터에 저장한 토큰만 지웁니다. 서버에 남은 토큰을 폐기하려면 웹의 계정 메뉴 → API 토큰에서 폐기하세요.
 
+## 버그 제보·요청
+
+[GitHub Issues](https://github.com/R00neyj/rawdoc/issues) 에 남겨 주세요. 공개로 남기기 어려운 내용은 `contact@rawdoc.app` 으로 보내 주세요.
+
 ## 라이선스 고지
 
 이미지 변환에 쓰는 코덱(jSquash·libwebp·libjpeg-turbo)의 라이선스는 `dist/THIRD_PARTY_NOTICES.txt` 에 있습니다.

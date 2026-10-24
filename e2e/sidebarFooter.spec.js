@@ -44,7 +44,7 @@ test('F-2090 E2 도움말 메뉴 — 키보드 순환, Esc 포커스 복귀, 도
   await page.keyboard.press('Enter')
   await expect(page.getByRole('menuitem', { name: '도움말' })).toBeFocused()
   await page.keyboard.press('ArrowUp')
-  await expect(page.getByRole('menuitem', { name: '새 소식' })).toBeFocused()
+  await expect(page.getByRole('menuitem', { name: '버그 제보·요청' })).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(page.getByRole('menuitem', { name: '도움말' })).toBeFocused()
   await page.keyboard.press('ArrowDown')

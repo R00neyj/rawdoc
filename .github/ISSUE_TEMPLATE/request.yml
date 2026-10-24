@@ -1,0 +1,17 @@
+name: 기능 요청
+description: 있었으면 하는 기능이나 바뀌었으면 하는 동작을 알려 주세요
+title: "[요청] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 하고 싶은 일
+      description: 지금 무엇을 하려다 막혔는지 적어 주세요
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 생각해 둔 방법
+      description: 있으면 적어 주세요. 다른 도구에서 본 방식도 좋습니다

@@ -8,6 +8,8 @@ export type Brand = {
   ogImage: string
   cliName: string
   siteUrl: string
+  issuesUrl: string
+  contactEmail: string
 }
 
 const brand: Brand = {
@@ -22,6 +24,9 @@ const brand: Brand = {
   cliName: 'rawdoc',
   // 운영 사이트 주소. canonical·sitemap·CSP 리비전이 쓴다 (F-272 6.3)
   siteUrl: 'https://rawdoc.app/',
+  // 버그 제보·요청 받는 곳. 도움말 메뉴·사이트 꼬리·CLI 도움말이 쓴다
+  issuesUrl: 'https://github.com/R00neyj/rawdoc/issues',
+  contactEmail: 'contact@rawdoc.app',
 }
 
 export default brand

@@ -1,11 +1,11 @@
 // 사이드바 하단 `?` 메뉴 — ExportMenu.tsx 틀을 따른다, 목록은 위로 연다 (F-2090 3.2·4.2)
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 
-import { IconExternalLink, IconGuide, IconHelp, IconNews, IconTooltip } from './icons'
+import { IconBugReport, IconExternalLink, IconGuide, IconHelp, IconNews, IconTooltip } from './icons'
 import { helpMenuItems, type HelpMenuKey } from './helpMenuRules'
 import usePresence from './usePresence'
 
-const ITEM_ICON: Record<HelpMenuKey, ComponentType<{ size?: number }>> = { help: IconHelp, guides: IconGuide, changelog: IconNews }
+const ITEM_ICON: Record<HelpMenuKey, ComponentType<{ size?: number }>> = { help: IconHelp, guides: IconGuide, changelog: IconNews, feedback: IconBugReport }
 const LABEL = '도움말 메뉴'
 
 export default function HelpMenu({ onOpenHelp }: { onOpenHelp: () => void }) {

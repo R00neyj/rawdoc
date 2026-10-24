@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 이메일로 문의
+    url: mailto:contact@rawdoc.app
+    about: 계정·개인정보 문의나, 공개 이슈로 남기기 어려운 내용은 이메일로 보내 주세요

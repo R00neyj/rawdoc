@@ -1,4 +1,5 @@
 // 사이트 공통 머리·꼬리 — 랜딩(워커)·사이트 페이지(빌드) 둘 다 쓴다 (specs/features/F-272.md 5.1). 순수 함수. DOM·React·node:fs 를 import 하지 않는다
+import brand from '../../brand.config'
 
 export type SiteLink = { path: string; label: string }
 
@@ -265,8 +266,9 @@ export function renderSiteFooter(args: { brandName: string }): string {
   const links = SITE_FOOTER_LINKS.map(
     (link) => `<a href="${escapeHtml(link.path)}">${escapeHtml(link.label)}</a>`,
   ).join('')
+  const feedback = `<a href="${escapeHtml(brand.issuesUrl)}" target="_blank" rel="noopener noreferrer">버그 제보·요청</a><a href="mailto:${escapeHtml(brand.contactEmail)}">문의</a>`
 
   return `<footer class="site-foot">
-  <span>${escapeHtml(args.brandName)}</span>${links}
+  <span>${escapeHtml(args.brandName)}</span>${links}${feedback}
 </footer>`
 }

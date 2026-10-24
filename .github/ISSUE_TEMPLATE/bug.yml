@@ -1,0 +1,45 @@
+name: 버그 제보
+description: 의도와 다르게 동작하는 것을 알려 주세요
+title: "[버그] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 무슨 일이 있었나요
+      description: 기대한 동작과 실제 동작을 적어 주세요
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 다시 겪는 방법
+      description: 순서대로 적어 주세요. 문제가 되는 마크다운 원문이 있으면 함께 붙여 주세요
+      placeholder: |
+        1. 새 문서를 만든다
+        2. `**"문구"**를` 을 친다
+        3. 편집 모드에서 굵게 보이지 않는다
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: 어디서 겪었나요
+      options:
+        - 웹 앱 (브라우저)
+        - 설치한 앱 (PWA)
+        - 명령줄 도구 (CLI)
+        - AI 앱 연결 (MCP)
+        - 공개 사이트
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 브라우저·OS (또는 CLI 버전)
+      placeholder: Chrome 141 / Windows 11, rawdoc 0.4.0
+  - type: textarea
+    id: extra
+    attributes:
+      label: 덧붙일 것
+      description: 화면 캡처나 콘솔 오류가 있으면 붙여 주세요. 문서 내용 중 남에게 보이면 안 되는 부분은 지워 주세요

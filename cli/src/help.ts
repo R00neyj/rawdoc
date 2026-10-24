@@ -69,6 +69,7 @@ export function helpText(version: string): string {
   lines.push(`AI 도구에서 쓸 때는 npx -y ${CLI} … 또는 ${ENV_PREFIX}_TOKEN 환경 변수를 쓰세요.`)
   lines.push(`문서를 고치는 순서: ${EDIT_ORDER}. 종료 코드 5 면 ${CLI} merge <id> 파일.md 로 합친 뒤 다시 put 하세요.`)
   lines.push(`문서에 이미지가 있으면 ${CLI} get <id> -o 파일.md --images 로 원문과 이미지를 함께 받아 그림을 직접 보게 하세요.`)
+  lines.push(`버그 제보·요청: ${brand.issuesUrl} (공개로 남기기 어려우면 ${brand.contactEmail})`)
   lines.push('모든 명령은 --json 을 받습니다. 결과는 표준 출력에, 오류는 표준 오류에 JSON 한 줄로 씁니다.')
   lines.push(`AI 도구가 문서를 쓰기 전에 ${CLI} syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.`)
   return lines.join('\n') + '\n'
