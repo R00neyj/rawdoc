@@ -1,7 +1,7 @@
 // 오른쪽 패널 `링크`·`할 일` 보기 — 보일 때만 목록을 한 번 읽어 둘이 나눠 쓴다. 지금 문서는 편집기 본문 기준 (small 2026-10-11)
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../../lib/wiki/docLinks'
-import { findOpenTodos, groupTasks, scanTodoSources, type TaskBucket, type TaskFilter, type TaskRow } from '../../lib/docTodos'
+import { findOpenTodos, groupTasks, scanTodoSources, type TaskBucket, type TaskFilter, type TaskRow } from '../../lib/panel/docTodos'
 import { buildLocalGraph, type LocalGraph } from '../../lib/map/localGraph'
 import type { WikiResolver } from '../../lib/wiki/wikiResolve'
 import type { EditorHandle } from '../../editor/Editor'

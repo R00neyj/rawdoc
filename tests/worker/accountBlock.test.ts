@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from '../../worker/testD1'
-import { buildImageBlock } from '../../src/lib/imageBlock'
+import { buildImageBlock } from '../../src/lib/image/imageBlock'
 
 type Worker = {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response>

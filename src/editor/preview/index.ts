@@ -3,7 +3,7 @@ import type { Extension } from '@codemirror/state'
 
 import { blockPreview } from './blocks'
 import type { ResolveAttachment } from './blocks'
-import type { ResolveImagePath } from '../../lib/imageMarkdown'
+import type { ResolveImagePath } from '../../lib/image/imageMarkdown'
 import { highlightMarkPreview } from './highlightMark'
 import { inlinePreview } from './inline'
 import { gutterAlignPreview, linePreview, listIndentPreview } from './lines'

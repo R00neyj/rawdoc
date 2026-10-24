@@ -3,8 +3,8 @@ import { errorResponse } from './http'
 import { getUser } from './auth'
 import { getDocAccess, isWriteBlocked } from './access'
 import { isValidUuid } from './validate'
-import { SOCKET_CLOSE } from '../src/lib/docRoomProtocol'
-import type { SocketCloseReason } from '../src/lib/docRoomProtocol'
+import { SOCKET_CLOSE } from '../src/lib/live/docRoomProtocol'
+import type { SocketCloseReason } from '../src/lib/live/docRoomProtocol'
 import { isAllowedOrigin } from './origin'
 
 // Worker 와 DocRoom 사이 계약

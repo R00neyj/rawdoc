@@ -1,4 +1,4 @@
-import { CSP_MODE, cspHeaders, type CspKind } from '../src/lib/cspPolicy'
+import { CSP_MODE, cspHeaders, type CspKind } from '../src/lib/site/cspPolicy'
 import { consentFormTarget } from './oauthPages'
 import { rootTarget } from './rootRoute'
 

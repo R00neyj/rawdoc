@@ -19,7 +19,7 @@ import {
   type NotificationsShareMessage,
 } from './notificationsShare'
 import { unreadNotificationIdsForDoc } from '../sidebar/docNotifications'
-import { newTabId } from '../../lib/tabChannel'
+import { newTabId } from '../../lib/live/tabChannel'
 
 export type NotificationsState = {
   status: 'idle' | 'loading' | 'ready' | 'failed' // idle = 꺼짐, loading = 첫 응답 전, failed = 한 번도 못 받음

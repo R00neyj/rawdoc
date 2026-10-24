@@ -11,7 +11,7 @@ import {
   validateCommentEntry,
   type CommentThread,
 } from '../../lib/comments/docComments'
-import { encodeCommentOp, parseCommentOpReply, type CommentOp, type CommentOpRejectReason } from '../../lib/docRoomProtocol'
+import { encodeCommentOp, parseCommentOpReply, type CommentOp, type CommentOpRejectReason } from '../../lib/live/docRoomProtocol'
 import type { CommentWriteFailure, CommentWriteResult, CommentWriter } from './useDocComments'
 
 export const COMMENT_OP_TIMEOUT_MS = 10_000 // 보낸 뒤 응답을 기다리는 시간

@@ -1,7 +1,7 @@
 // 병합 알림 판정 — 끊긴 동안 내 편집과 서버 쪽 본문 변경이 둘 다 있었나 (specs/features/F-306.md 7장, F-301 3.7)
 import type * as Y from 'yjs'
 
-import { Y_CONTENT_NAME } from '../../lib/docRoomProtocol'
+import { Y_CONTENT_NAME } from '../../lib/live/docRoomProtocol'
 
 export type MergeTracker = {
   setLive(live: boolean): boolean

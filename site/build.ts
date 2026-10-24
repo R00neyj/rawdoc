@@ -5,10 +5,10 @@ import { renderSitePage } from './render'
 import { HELP_CONTENT_PATH, helpContent } from './helpPage'
 import { GUIDES_INDEX_PATH, guideEntry, guidesIndexContent, sortGuideEntries, type GuideEntry } from './guidesIndex'
 import { buildDocNav } from './pageNav'
-import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
-import { SITE_DESCRIPTION, SITE_URL } from '../src/lib/siteMeta'
+import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/site/siteChrome'
+import { SITE_DESCRIPTION, SITE_URL } from '../src/lib/site/siteMeta'
 import brand from '../brand.config'
-import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../src/lib/pageTheme'
+import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../src/lib/site/pageTheme'
 
 export type SiteInput = {
   content: Record<string, string>

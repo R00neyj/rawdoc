@@ -1,5 +1,5 @@
 // 서비스 워커 푸시 처리기의 순수 규칙 — push-sw.js 크기 상한 때문에 pushPayload 하나만 import 한다 (specs/features/F-3004.md 3장)
-import { FALLBACK_NOTIFICATION, readPushPayload, safePushUrl } from '../lib/pushPayload'
+import { FALLBACK_NOTIFICATION, readPushPayload, safePushUrl } from '../lib/push/pushPayload'
 
 export const PUSH_ICON_URL = '/icons/icon-192.png'
 export const PUSH_BADGE_URL = '/icons/badge-96.png'

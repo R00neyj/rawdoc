@@ -2,16 +2,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 
-vi.mock('../../src/lib/pushText', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/pushText')>()
+vi.mock('../../src/lib/push/pushText', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/push/pushText')>()
   return { ...actual, commentPushPayload: vi.fn(actual.commentPushPayload) }
 })
 
 import { asD1, openTestDb } from '../../worker/testD1'
 import { createVapidAuth, importVapidKey } from '../../worker/webPush'
 import type { VapidAuth } from '../../worker/webPush'
-import { commentPushPayload } from '../../src/lib/pushText'
-import { PUSH_SENDS_PER_RUN_MAX, PUSH_TTL_SEC } from '../../src/lib/pushPayload'
+import { commentPushPayload } from '../../src/lib/push/pushText'
+import { PUSH_SENDS_PER_RUN_MAX, PUSH_TTL_SEC } from '../../src/lib/push/pushPayload'
 import { readPresence } from '../../worker/docRoomCore'
 import {
   PUSH_READ_ROWS_MAX,

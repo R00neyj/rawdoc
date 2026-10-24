@@ -10,8 +10,8 @@ import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view
 import { activeLines, isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
 import { frontmatterWidgetExtension, frontmatterWidgetInfo } from '../frontmatter'
-import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/callout'
-import { calloutIconSvg } from '../../lib/calloutIcons'
+import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/markdown/callout'
+import { calloutIconSvg } from '../../lib/markdown/calloutIcons'
 import { imagePathsChanged, imagePathsOf, innermostListItem, leadingImageLine, nestedImageLines } from './imagePaths'
 
 const HIDE = Decoration.replace({})

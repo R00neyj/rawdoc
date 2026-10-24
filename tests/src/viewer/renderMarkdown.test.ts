@@ -1,7 +1,7 @@
 // specs/features/F-123.md 4장 A1·A2
 import { describe, expect, it } from 'vitest'
 import { parseMarkdownTokens, renderMarkdown, renderMarkdownInline, setDefaultSoftBreaks } from '../../../src/viewer/renderMarkdown'
-import { findHighlights } from '../../../src/lib/highlightSyntax'
+import { findHighlights } from '../../../src/lib/markdown/highlightSyntax'
 
 describe('renderMarkdown — 표·취소선', () => {
   it('GFM 표를 <table> 로 바꾼다', () => {

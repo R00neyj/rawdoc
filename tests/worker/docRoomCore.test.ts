@@ -11,7 +11,7 @@ import { resolveDocAccess } from '../../worker/access'
 import { DocRoomCore, REVALIDATE_INTERVAL_MS, SNAPSHOT_RETRY_MS } from '../../worker/docRoomCore'
 import type { DocRoomHost, RoomConnection } from '../../worker/docRoomCore'
 import type { DoStorageLike } from '../../worker/yStore'
-import { encodeDocRoomMessage } from '../../src/lib/docRoomProtocol'
+import { encodeDocRoomMessage } from '../../src/lib/live/docRoomProtocol'
 
 const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const CLIENT = { client: true }

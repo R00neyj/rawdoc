@@ -1,5 +1,5 @@
 // .md 가져오기 (specs/features/F-114.md 2.2). F-119 가 재사용할 수 있게 파일 목록을 받는다
-import { decodeMarkdown } from '../../lib/decodeMarkdown'
+import { decodeMarkdown } from '../../lib/markdown/decodeMarkdown'
 import type { Doc, LineEnding } from '../../types'
 
 type ImportNotice = { type: 'info' | 'error'; message: string }

@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { cleanupServerAttachments } from '../../worker/attachmentGc'
-import { extractAttachmentRefs } from '../../src/lib/imageBlock'
+import { extractAttachmentRefs } from '../../src/lib/image/imageBlock'
 import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION } from '../../src/lib/vault/e2eeLimits'
 import { ATTACHMENT_QUOTA_BYTES } from '../../worker/attachments'
 

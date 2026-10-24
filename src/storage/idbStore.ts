@@ -2,7 +2,7 @@
 // 이름에 제품명을 쓰지 않는다. 제품명이 바뀌어도 사용자 문서가 남아야 한다 (CLAUDE.md 불변조건)
 import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
-import { extractAttachmentRefs } from '../lib/imageBlock'
+import { extractAttachmentRefs } from '../lib/image/imageBlock'
 import { parseCommentRecords, type CommentRecord } from '../lib/comments/docComments'
 import { restoreFolderId, trashPathOf } from '../lib/trash/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'

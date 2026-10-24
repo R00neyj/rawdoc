@@ -1,5 +1,5 @@
 // put 미리 보기·줄바꿈 안내 순수 함수 (specs/features/F-2132.md 3·4장)
-import { fromEditorText, toEditorText, type LineEnding } from '../../src/lib/lineEnding'
+import { fromEditorText, toEditorText, type LineEnding } from '../../src/lib/markdown/lineEnding'
 
 export type PutPreview = {
   dryRun: true

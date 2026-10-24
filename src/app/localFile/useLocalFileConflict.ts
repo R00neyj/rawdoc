@@ -1,7 +1,7 @@
 // 로컬 파일 외부 변경 — 쓰기 직전 가드·focus 판정·띠 상태·버튼 동작 (specs/features/F-2157.md 2·3장)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { decodeMarkdown } from '../../lib/decodeMarkdown'
-import { encodeMarkdown } from '../../lib/encodeMarkdown'
+import { decodeMarkdown } from '../../lib/markdown/decodeMarkdown'
+import { encodeMarkdown } from '../../lib/markdown/encodeMarkdown'
 import { downloadBlob } from '../importExport/exportDoc'
 import { decideExternalChange, LOCAL_CONFLICT_TEXT, readDiskStamp } from './localFileConflict'
 import { localNotUtf8Message, localOpenFailedMessage } from './localFileState'

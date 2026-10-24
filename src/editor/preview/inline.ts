@@ -8,7 +8,7 @@ import type { SyntaxNode } from '@lezer/common'
 
 import { activeLines, isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
-import { parseCalloutHeader } from '../../lib/callout'
+import { parseCalloutHeader } from '../../lib/markdown/callout'
 import { findWikiLinks } from '../../lib/wiki/wikiLink'
 
 // 마커를 화면에서만 지운다

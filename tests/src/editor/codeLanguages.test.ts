@@ -11,9 +11,9 @@ import { frontmatterExtension } from '../../../src/editor/frontmatter'
 import { insertNewlineContinueList } from '../../../src/editor/listEnter'
 import { markdownHighlightStyle } from '../../../src/editor/highlight'
 import { codeEditorExtension, codeHighlighter, codeLanguageFor } from '../../../src/editor/codeLanguages'
-import { highlightCodeLines } from '../../../src/lib/codeHighlight'
-import { loadCodeGrammar } from '../../../src/lib/codeParsers'
-import type { CodeLangId } from '../../../src/lib/codeLang'
+import { highlightCodeLines } from '../../../src/lib/markdown/codeHighlight'
+import { loadCodeGrammar } from '../../../src/lib/markdown/codeParsers'
+import type { CodeLangId } from '../../../src/lib/markdown/codeLang'
 
 const BASE: Extension[] = [EditorState.tabSize.of(4), indentUnit.of('    ')]
 
@@ -273,7 +273,7 @@ describe('A5 — codeLanguageFor', () => {
   it('loadCodeGrammar 가 null 이면 한 번 거부된 뒤 그 id 는 null, 다시 부르지 않는다', async () => {
     vi.resetModules()
     const load = vi.fn(async () => null)
-    vi.doMock('../../../src/lib/codeParsers', () => ({ loadCodeGrammar: load, loadedCodeGrammar: () => null }))
+    vi.doMock('../../../src/lib/markdown/codeParsers', () => ({ loadCodeGrammar: load, loadedCodeGrammar: () => null }))
     const mod = await import('../../../src/editor/codeLanguages')
     const desc = mod.codeLanguageFor('py')!
     expect(desc).not.toBeNull()
@@ -291,6 +291,6 @@ describe('A5 — codeLanguageFor', () => {
     ensureSyntaxTree(edited, edited.doc.length, 5000)
     await Promise.resolve()
     expect(load).toHaveBeenCalledTimes(1)
-    vi.doUnmock('../../../src/lib/codeParsers')
+    vi.doUnmock('../../../src/lib/markdown/codeParsers')
   })
 })

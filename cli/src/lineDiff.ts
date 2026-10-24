@@ -1,5 +1,5 @@
 // 줄 단위 diff(Myers)와 unified diff 문자열. 줄은 끝 '\n' 을 품은 채 비교한다 — 마지막 줄의 줄바꿈 유무도 차이로 잡힌다
-import { toEditorText } from '../../src/lib/lineEnding'
+import { toEditorText } from '../../src/lib/markdown/lineEnding'
 
 export type DiffOp = { kind: 'equal' | 'delete' | 'insert'; line: string }
 

@@ -3,7 +3,7 @@ import YProvider from 'y-partyserver/provider'
 import { removeAwarenessStates } from 'y-protocols/awareness'
 import type * as Y from 'yjs'
 
-import { DOC_SOCKET_PREFIX, SOCKET_PING, SOCKET_PONG } from '../lib/docRoomProtocol'
+import { DOC_SOCKET_PREFIX, SOCKET_PING, SOCKET_PONG } from '../lib/live/docRoomProtocol'
 
 type Awareness = YProvider['awareness']
 

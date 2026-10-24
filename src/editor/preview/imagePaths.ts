@@ -2,8 +2,8 @@
 import { StateEffect, StateField } from '@codemirror/state'
 import type { EditorState } from '@codemirror/state'
 import type { SyntaxNode } from '@lezer/common'
-import { imageLineAt } from '../../lib/imageMarkdown'
-import type { ImageTarget, ParsedImageLine, ResolveImagePath } from '../../lib/imageMarkdown'
+import { imageLineAt } from '../../lib/image/imageMarkdown'
+import type { ImageTarget, ParsedImageLine, ResolveImagePath } from '../../lib/image/imageMarkdown'
 
 export const imagePathsChanged = StateEffect.define<ResolveImagePath | null>()
 

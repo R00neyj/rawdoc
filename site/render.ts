@@ -1,14 +1,14 @@
 // 글 1개 → 완결된 HTML (specs/features/F-272.md 5.3) — site/build.ts 가 파일 입출력을 하고 이 모듈은 문자열만 다룬다
-import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../src/lib/frontmatter'
+import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../src/lib/markdown/frontmatter'
 import { renderMarkdown } from '../src/viewer/renderMarkdown'
-import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
-import { SITE_URL, SITE_DESCRIPTION } from '../src/lib/siteMeta'
-import { KIND_ALIASES } from '../src/lib/callout'
-import { calloutIconSvg } from '../src/lib/calloutIcons'
-import { jsonLdScript, sitePageGraph } from '../src/lib/structuredData'
+import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/site/siteChrome'
+import { SITE_URL, SITE_DESCRIPTION } from '../src/lib/site/siteMeta'
+import { KIND_ALIASES } from '../src/lib/markdown/callout'
+import { calloutIconSvg } from '../src/lib/markdown/calloutIcons'
+import { jsonLdScript, sitePageGraph } from '../src/lib/site/structuredData'
 import brand from '../brand.config'
 import { siteHeadings, addHeadingIds, renderDocNav, renderToc, renderFold, insertFoldIntoBody, type DocNav } from './pageNav'
-import { SITE_THEME_SCRIPT_PATH } from '../src/lib/pageTheme'
+import { SITE_THEME_SCRIPT_PATH } from '../src/lib/site/pageTheme'
 
 // 인라인 코드가 `[!종류]` 하나뿐이고 그 이름이 별칭 표에 있으면 앞에 앱과 같은 콜아웃 아이콘을 붙인다.
 // 사이트 글에만 — 앱 보기 모드(renderMarkdown)는 사용자 문서를 그리므로 건드리지 않는다 (tweak 2026-09-28)

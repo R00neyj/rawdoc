@@ -1,7 +1,7 @@
 // 그려 둔 마크다운 HTML 안 첨부 이미지·Mermaid 를 채운다 — Viewer 보기 모드와 인쇄(printDoc.ts)가 같은 함수를 쓴다 (specs/features/F-279.md 4.6)
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
-import { renderMermaid } from '../lib/mermaidRender'
-import { createAttachmentUrl } from '../lib/attachmentUrls'
+import { renderMermaid } from '../lib/markdown/mermaidRender'
+import { createAttachmentUrl } from '../lib/image/attachmentUrls'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 

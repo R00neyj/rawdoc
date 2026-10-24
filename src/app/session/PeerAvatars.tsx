@@ -1,8 +1,8 @@
 // 상단바 접속자 아바타 묶음 — 접속자가 없으면 요소 자체가 없다 (specs/features/F-307.md 7장)
 import { useState } from 'react'
 
-import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW, peerInitial, visiblePeers } from '../../lib/peers'
-import type { Peer } from '../../lib/peers'
+import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW, peerInitial, visiblePeers } from '../../lib/live/peers'
+import type { Peer } from '../../lib/live/peers'
 import usePresence from '../usePresence'
 
 const OVERFLOW_TOOLTIP_MAX = 10

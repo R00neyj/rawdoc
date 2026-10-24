@@ -1,5 +1,5 @@
 // 정해진 기기들에 실제로 보내기 — 루프·이메일 단위·Worker 백그라운드. ./auth 를 import 하지 않는다 (specs/features/F-3007.md 2장)
-import type { PushPayload } from '../src/lib/pushPayload'
+import type { PushPayload } from '../src/lib/push/pushPayload'
 import { readVar } from './origin'
 import { listLivePushSubscriptions, loadVapid, pushResultStatements } from './pushServer'
 import type { LivePushSubscription } from './pushServer'

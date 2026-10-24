@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildWikiLinkTable, collectWikiSet, type LoadDoc } from '../../worker/shareSet'
 import { createWikiResolver } from '../../src/lib/wiki/wikiResolve'
-import { stripComments } from '../../src/lib/comments'
+import { stripComments } from '../../src/lib/markdown/comments'
 
 type Doc = { id: string; title: string; content: string; folderId?: string | null }
 

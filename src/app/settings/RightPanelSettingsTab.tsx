@@ -1,7 +1,7 @@
 // 설정 `오른쪽 패널` — 카드 넷(표시할 항목·댓글창과 함께·달력·할 일), 모두 기기별 (small 2026-10-10, 2026-10-11, 2026-10-22)
 import SettingsCard from './SettingsCard'
 import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
-import type { PanelItemId } from '../../lib/panelSlots'
+import type { PanelItemId } from '../../lib/panel/panelSlots'
 import type { CommentPanelLayout, RightPanelItemsSettings } from '../rightPanel/useRightPanel'
 import type { TemplateEntry } from '../../lib/templates/templates'
 

@@ -1,7 +1,7 @@
 // `할 일` 보기 전역 필터(Tasks Global Filter)와 글자에서 표시 숨기기 — 기기별 (small 2026-10-11)
 import { useMemo, useState } from 'react'
 import { getPref, setPref } from '../prefs'
-import { parseTaskFilters, type TaskFilter } from '../../lib/docTodos'
+import { parseTaskFilters, type TaskFilter } from '../../lib/panel/docTodos'
 
 export const DEFAULT_TASK_FILTER = '#task, #할일, #todo'
 

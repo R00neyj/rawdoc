@@ -15,7 +15,7 @@ import {
   type PushTarget,
   type VapidAuth,
 } from '../../worker/webPush'
-import { encodePushPayload, type PushPayload } from '../../src/lib/pushPayload'
+import { encodePushPayload, type PushPayload } from '../../src/lib/push/pushPayload'
 
 const subtle = crypto.subtle
 const enc = new TextEncoder()

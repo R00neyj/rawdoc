@@ -1,7 +1,7 @@
 // OAuth 로그인 이어가기·동의·오류 화면 — worker/index.ts 한 바퀴, 실제 better-auth + oauth-provider (specs/features/F-4010.md 6장 A1~A8)
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 import { asAuthDb, openTestDb } from '../../worker/testD1'
 import { mcpResource, oauthIssuer } from '../../worker/oauthServer'
 import worker from '../../worker/index'

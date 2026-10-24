@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { EditorHandle } from '../../editor/Editor'
 import type { GithubLink } from '../../lib/github/githubContract'
-import type { LineEnding } from '../../lib/lineEnding'
+import type { LineEnding } from '../../lib/markdown/lineEnding'
 import { postDocGithubPull, postDocGithubSynced, type GithubResult } from './githubApi'
 import { lineEndingNote, mergedTooLarge, pullFailureMessage, PULL_OFFLINE_MESSAGE, readPulled, sameNotice, type PulledText } from './githubPull'
 import { githubErrorMessage } from './githubUi'

@@ -5,7 +5,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
 
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
-import { parseCalloutHeader } from '../../../src/lib/callout'
+import { parseCalloutHeader } from '../../../src/lib/markdown/callout'
 import {
   insertCallout,
   insertCodeBlock,

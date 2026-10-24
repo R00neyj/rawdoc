@@ -1,11 +1,11 @@
 // 보기·인쇄·내보내기 html 의 코드블록 구문 색 (specs/features/F-2126.md 3장)
 import { useEffect, useMemo, useState } from 'react'
-import { codeLangIdsInHtml, type CodeLangId } from '../lib/codeLang'
+import { codeLangIdsInHtml, type CodeLangId } from '../lib/markdown/codeLang'
 
 export const HIGHLIGHT_WAIT_MS = 3000
 
-type Highlight = typeof import('../lib/codeHighlight')
-type Parsers = typeof import('../lib/codeParsers')
+type Highlight = typeof import('../lib/markdown/codeHighlight')
+type Parsers = typeof import('../lib/markdown/codeParsers')
 
 type Engine = { highlight: Highlight; parsers: Parsers }
 let engine: Engine | null = null
@@ -13,7 +13,7 @@ let engineLoad: Promise<Engine | null> | null = null
 
 // 엔진은 메인 청크에 넣지 않으려 동적 import — 실패하면 그 탭에서 다시 부르지 않는다
 function loadEngine(): Promise<Engine | null> {
-  engineLoad ??= Promise.all([import('../lib/codeHighlight'), import('../lib/codeParsers')]).then(
+  engineLoad ??= Promise.all([import('../lib/markdown/codeHighlight'), import('../lib/markdown/codeParsers')]).then(
     ([highlight, parsers]) => (engine = { highlight, parsers }),
     () => null,
   )

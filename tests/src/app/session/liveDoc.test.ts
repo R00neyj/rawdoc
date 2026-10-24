@@ -12,7 +12,7 @@ import {
 } from '../../../../src/app/session/liveDoc'
 import type { LiveDocController, LiveSnapshot } from '../../../../src/app/session/liveDoc'
 import type { LiveSocket, LiveSocketOptions } from '../../../../src/storage/liveSocket'
-import { encodeDocRoomMessage } from '../../../../src/lib/docRoomProtocol'
+import { encodeDocRoomMessage } from '../../../../src/lib/live/docRoomProtocol'
 
 function fakeClock() {
   let now = 0

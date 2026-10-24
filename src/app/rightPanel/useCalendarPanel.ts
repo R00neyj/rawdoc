@@ -17,7 +17,7 @@ import {
   type CalendarDate,
   type CalendarDay,
   type YearMonth,
-} from '../../lib/calendar'
+} from '../../lib/panel/calendar'
 import type { CalendarSettings } from '../settings/CalendarSettingsTab'
 import type { CreateDocInput } from '../document/useDocNavigation'
 import type { TemplateContentVars } from '../templates/useNewDocTemplate'

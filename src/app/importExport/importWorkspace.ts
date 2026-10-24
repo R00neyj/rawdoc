@@ -1,9 +1,9 @@
 // F-282 가져오기 — zip 읽기·파일명 디코딩·판별·계획(순수)·적용 (specs/features/F-282.md 3장)
 import { Unzip, UnzipInflate } from 'fflate'
 
-import { decodeMarkdown } from '../../lib/decodeMarkdown'
-import { fromEditorText, toEditorText } from '../../lib/lineEnding'
-import { inspectImageBytes } from '../../lib/imageFile'
+import { decodeMarkdown } from '../../lib/markdown/decodeMarkdown'
+import { fromEditorText, toEditorText } from '../../lib/markdown/lineEnding'
+import { inspectImageBytes } from '../../lib/image/imageFile'
 import type { AttachmentExt, Doc, Folder, LineEnding } from '../../types'
 import type { WorkspaceManifest } from './exportWorkspace'
 

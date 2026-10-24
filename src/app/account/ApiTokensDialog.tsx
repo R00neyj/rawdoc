@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import brand from '../../../brand.config'
-import { GUIDES_PATH } from '../../lib/siteChrome'
+import { GUIDES_PATH } from '../../lib/site/siteChrome'
 import Dialog from '../Dialog'
 import { listTokens, createToken, revokeToken, type ApiToken, type CreatedApiToken } from '../../storage/apiTokensApi'
 

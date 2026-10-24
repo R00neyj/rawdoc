@@ -3,7 +3,7 @@ import * as Y from 'yjs'
 import { EditorState } from '@codemirror/state'
 import { YSyncConfig } from 'y-codemirror.next'
 
-import { toEditorText } from '../../../src/lib/lineEnding'
+import { toEditorText } from '../../../src/lib/markdown/lineEnding'
 import { createYBinding, createYBindingFromState, redoLocal, undoLocal } from '../../../src/editor/yBinding'
 import type { YBinding } from '../../../src/editor/yBinding'
 

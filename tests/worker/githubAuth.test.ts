@@ -1,7 +1,7 @@
 // F-3014 A3~A9·A15 GitHub 연결 라우트 다섯 — worker/index.ts 를 통째로, 가짜 GitHub fetch (specs/features/F-3014.md 5장)
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 import { asAuthDb, asD1, openTestDb } from '../../worker/testD1'
 import { importTokenKey, openToken, sealToken } from '../../worker/githubCrypto'
 import { githubMonth, type GithubStatus } from '../../src/lib/github/githubContract'

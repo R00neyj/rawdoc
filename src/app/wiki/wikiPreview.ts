@@ -1,5 +1,5 @@
 // 위키링크 미리보기 순수 모듈 — 상수·본문 자르기·위치 계산·대상 판정·호버 타이머 (specs/features/F-2044.md 3장). React·DOM 을 import 하지 않는다(B4)
-import { toEditorText } from '../../lib/lineEnding'
+import { toEditorText } from '../../lib/markdown/lineEnding'
 
 export const WIKI_PREVIEW_OPEN_DELAY_MS = 500
 export const WIKI_PREVIEW_CLOSE_GRACE_MS = 300

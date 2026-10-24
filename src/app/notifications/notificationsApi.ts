@@ -7,9 +7,9 @@ import {
   type InboxNotificationsResponse,
   type NotificationItem,
 } from '../../lib/comments/docComments'
-import { accessRequestPushPayload, formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../../lib/pushText'
+import { accessRequestPushPayload, formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../../lib/push/pushText'
 
-export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../../lib/pushText' // F-3002 5.4 — 옛 import 그대로
+export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../../lib/push/pushText' // F-3002 5.4 — 옛 import 그대로
 
 export const NOTIFICATIONS_POLL_MS = 60_000 // F-500 4.8
 export const NOTIFICATIONS_MIN_GAP_MS = 5_000 // 자동 가져오기끼리의 최소 간격

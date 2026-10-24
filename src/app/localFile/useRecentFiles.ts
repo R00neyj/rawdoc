@@ -1,7 +1,7 @@
 // 최근 연 컴퓨터 파일 — 불러오기·열림 구독·다시 열기·빼기 (specs/features/F-2158.md 3장)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ensureWritePermission, localFileSupported } from '../../lib/fileSystemAccess'
-import type { RecentFileItem, RecentFileRow } from '../../lib/recentFiles'
+import { ensureWritePermission, localFileSupported } from '../../lib/file/fileSystemAccess'
+import type { RecentFileItem, RecentFileRow } from '../../lib/file/recentFiles'
 import { createRecentFilesStore, type RecentFilesStore } from '../../storage/recentFilesStore'
 import type { NoticeWithAction } from '../notices/NoticeBar'
 import type { UseLocalFileResult } from './useLocalFile'

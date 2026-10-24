@@ -1,9 +1,9 @@
 // 템플릿 폴더 판정·목록, 변수 치환, 삽입 계획 — 순수 함수 (specs/features/F-2022.md 4장, F-2037.md 2.2)
 import { normalizeForSearch, foldCase } from '../search/docSearch'
 import { screenParentResolver, descendantFolderIds, type FolderLike } from '../folderTree'
-import { findFrontmatter, textAfterFrontmatter, parseSimpleProperties } from '../frontmatter'
+import { findFrontmatter, textAfterFrontmatter, parseSimpleProperties } from '../markdown/frontmatter'
 import { BUILTIN_TEMPLATES } from './builtinTemplates'
-import { toEditorText, fromEditorText, type LineEnding } from '../lineEnding'
+import { toEditorText, fromEditorText, type LineEnding } from '../markdown/lineEnding'
 
 export type TemplateEntry = {
   id: string // 사용자: 'doc:{docId}', 내장: 'builtin:{key}'

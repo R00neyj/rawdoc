@@ -11,7 +11,7 @@ import { attachmentResponse } from './attachments'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { isValidToken } from './token'
 import { IMAGE_MIME, sniffImage } from './imageSniff'
-import { extractAttachmentRefs } from '../src/lib/imageBlock'
+import { extractAttachmentRefs } from '../src/lib/image/imageBlock'
 import { encodePathSegments, isRepoDir, repoImagePaths } from '../src/lib/github/githubPath'
 import {
   GITHUB_IMAGES_PER_DOC,

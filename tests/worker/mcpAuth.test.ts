@@ -1,7 +1,7 @@
 // /mcp 토큰 관문·보호 자원 메타데이터·OpenAI 도메인 확인 (specs/features/F-4011.md 6장 M1~M6·M8·M9)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 import brand from '../../brand.config'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { authenticateMcp } from '../../worker/mcpAuth'

@@ -11,7 +11,7 @@ import {
   userCssExportBlock,
 } from '../../../src/viewer/toHtmlDoc'
 import { EXPORT_CSS } from '../../../src/viewer/exportHtmlCss'
-import { buildImageBlock } from '../../../src/lib/imageBlock'
+import { buildImageBlock } from '../../../src/lib/image/imageBlock'
 
 describe('collectMermaidSources (A1)', () => {
   it('mermaid 코드블록 본문만 문서 순서대로 뽑는다', () => {

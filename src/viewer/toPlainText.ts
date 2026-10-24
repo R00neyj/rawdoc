@@ -1,10 +1,10 @@
 // 마크다운 원문 → 평문(.txt) 변환. 순수 함수, DOM 없음 — 보기 모드와 같은 토큰을 순회한다, HTML 을 다시 파싱하지 않는다(F-278.md 4.1)
 import type { Token } from 'markdown-it'
 import { parseMarkdownTokens } from './renderMarkdown'
-import { stripComments } from '../lib/comments'
-import { findFrontmatter, textAfterFrontmatter } from '../lib/frontmatter'
-import { isMermaidInfo } from '../lib/codeLang'
-import type { ParsedImageBlock } from '../lib/imageBlock'
+import { stripComments } from '../lib/markdown/comments'
+import { findFrontmatter, textAfterFrontmatter } from '../lib/markdown/frontmatter'
+import { isMermaidInfo } from '../lib/markdown/codeLang'
+import type { ParsedImageBlock } from '../lib/image/imageBlock'
 import type { LineEnding } from '../types'
 
 const CHECKBOX_RE = /^<input\s+type="checkbox"/i

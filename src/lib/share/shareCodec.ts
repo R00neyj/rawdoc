@@ -1,6 +1,6 @@
 // 문서 ↔ 공유 링크 조각 인코딩 — 순수 함수, 비동기 (specs/features/F-130.md 3.3)
 // 조각 = base64url(패딩 없음)(deflate-raw(UTF-8(JSON))), JSON: { v:1, t:제목, c:본문(LF 로 이은 원문), e:"crlf"|"lf", r?:요청 토큰 }
-import { toEditorText, fromEditorText, type LineEnding } from '../lineEnding'
+import { toEditorText, fromEditorText, type LineEnding } from '../markdown/lineEnding'
 
 const SHARE_VERSION = 1
 

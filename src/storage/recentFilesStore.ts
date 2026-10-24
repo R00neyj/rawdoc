@@ -1,6 +1,6 @@
 // 최근 연 컴퓨터 파일 — IndexedDB `md-files`(제품명 쓰지 않음), 호출마다 열고 닫는다 (specs/features/F-2158.md 2장)
 import { openDB, type IDBPDatabase } from 'idb'
-import { planRecentAdd, sortRecentFiles, type RecentFileRow } from '../lib/recentFiles'
+import { planRecentAdd, sortRecentFiles, type RecentFileRow } from '../lib/file/recentFiles'
 
 export const RECENT_FILES_DB = 'md-files'
 const STORE = 'recent'

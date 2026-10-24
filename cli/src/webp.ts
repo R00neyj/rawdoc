@@ -8,7 +8,7 @@ import { initEmscriptenModule } from '@jsquash/webp/utils.js'
 import pngWasm from '@jsquash/png/codec/pkg/squoosh_png_bg.wasm?url&inline'
 import jpegWasm from '@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm?url&inline'
 import webpWasm from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url&inline'
-import { inspectImageBytes } from '../../src/lib/imageFile'
+import { inspectImageBytes } from '../../src/lib/image/imageFile'
 
 // worker/imageSniff.ts MAX_PIXELS — 서버가 거부할 크기를 wasm 메모리에 풀지 않는다
 const MAX_PIXELS = 40_000_000

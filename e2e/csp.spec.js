@@ -18,7 +18,7 @@ const violations = (page) => page.evaluate(() => window.cspViolationLog)
 
 test.describe('F-4001 CSP enforce', () => {
   test('F-4001 E1 앱: 문서·mermaid·수식·그림이 app 정책 enforce 아래 위반 0건', async ({ page, baseURL }) => {
-    const { buildCsp } = await import('../src/lib/cspPolicy.ts')
+    const { buildCsp } = await import('../src/lib/site/cspPolicy.ts')
     const policy = buildCsp('app', { origin: baseURL })
     await collectViolations(page)
     await page.route(
@@ -48,7 +48,7 @@ test.describe('F-4001 CSP enforce', () => {
 
   test('F-4001 E2 랜딩: nonce 인라인 스크립트가 landing 정책 enforce 아래 실행되고 위반 0건', async ({ page }) => {
     const { renderWelcomePage } = await import('../worker/welcomePage.ts')
-    const { buildCsp } = await import('../src/lib/cspPolicy.ts')
+    const { buildCsp } = await import('../src/lib/site/cspPolicy.ts')
     const nonce = 'e2eNonce123'
     const html = await renderWelcomePage({ nonce }).text()
     await collectViolations(page)

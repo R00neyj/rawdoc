@@ -4,8 +4,8 @@ import type { EditorState, Extension } from '@codemirror/state'
 import { Facet, StateEffect, StateField } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
-import type { ImageExt } from '../lib/imageBlock'
-import { buildImageLine } from '../lib/imageMarkdown'
+import type { ImageExt } from '../lib/image/imageBlock'
+import { buildImageLine } from '../lib/image/imageMarkdown'
 import { isComposing } from './composition'
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i

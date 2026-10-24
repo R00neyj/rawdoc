@@ -1,11 +1,11 @@
 // 옵시디언 볼트 내보내기 — 계획·본문 변환·링크 고쳐 쓰기(순수)·스트리밍 zip·내려받기 (specs/features/F-2020.md 4~6장)
 import { Zip, ZipPassThrough } from 'fflate'
 
-import { toObsidianFileName, toObsidianFolderName, toFolderName } from '../../lib/filename'
-import { extractAttachmentRefs, type ParsedImageBlock } from '../../lib/imageBlock'
-import { imageBlockToEmbed } from '../../lib/obsidianImage'
-import { fromEditorText, toEditorText } from '../../lib/lineEnding'
-import { findFrontmatter, textAfterFrontmatter } from '../../lib/frontmatter'
+import { toObsidianFileName, toObsidianFolderName, toFolderName } from '../../lib/file/filename'
+import { extractAttachmentRefs, type ParsedImageBlock } from '../../lib/image/imageBlock'
+import { imageBlockToEmbed } from '../../lib/image/obsidianImage'
+import { fromEditorText, toEditorText } from '../../lib/markdown/lineEnding'
+import { findFrontmatter, textAfterFrontmatter } from '../../lib/markdown/frontmatter'
 import { parseMarkdownTokens } from '../../viewer/renderMarkdown'
 import { scanWikiLinks } from '../../lib/wiki/wikiGraph'
 import { createWikiResolver, type WikiResolver, type WikiDocRef, type WikiFolderRef } from '../../lib/wiki/wikiResolve'

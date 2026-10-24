@@ -4,7 +4,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
 import { computeImagePlacement, isBlockedPosition } from '../../../src/editor/imageInsert'
-import { buildImageLine } from '../../../src/lib/imageMarkdown'
+import { buildImageLine } from '../../../src/lib/image/imageMarkdown'
 
 function apply(doc: string, from: number, insert: string): string {
   return doc.slice(0, from) + insert + doc.slice(from)

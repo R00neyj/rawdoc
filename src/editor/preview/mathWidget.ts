@@ -1,7 +1,7 @@
 // 편집 모드 블록 수식 위젯 $$…$$ (specs/features/F-291.md 4.2) — mermaidWidget.ts 와 같은 모양이되 KaTeX 는 동기라 비동기 대기가 없다
 import { EditorView, WidgetType } from '@codemirror/view'
 
-import { renderMath, requestRemeasureOnFontsReady } from '../../lib/mathRender'
+import { renderMath, requestRemeasureOnFontsReady } from '../../lib/markdown/mathRender'
 import { enterOnClick, observeHeight, stopObservingHeight } from './blocks'
 
 // eq() 비교 키는 TeX 원문 하나다(mermaidWidget.ts 44행과 같은 판단) — 위치는 넣지 않는다

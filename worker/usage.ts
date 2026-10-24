@@ -1,7 +1,7 @@
 // 사용량 열·한도 상수·사용량 줄 SQL·사용량 읽기 (specs/features/F-2024.md 2.3, F-2025.md 4장·5장)
-import { PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS } from '../src/lib/pushPayload'
-import { quotaPushPayload } from '../src/lib/pushText'
-import type { PushQuota } from '../src/lib/pushText'
+import { PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS } from '../src/lib/push/pushPayload'
+import { quotaPushPayload } from '../src/lib/push/pushText'
+import type { PushQuota } from '../src/lib/push/pushText'
 import { pushInBackground, pushToEmail } from './pushSend'
 import type { VapidAuth } from './webPush'
 export const DAILY_WRITE_LIMIT = 5_000

@@ -1,5 +1,5 @@
 // 오른쪽 패널 `할 일` 보기 — Tasks 방식 날짜 묶음(기한 지남·오늘·예정·날짜 없음). 읽기 전용, 누르면 그 문서의 그 줄로 (small 2026-10-11)
-import { TODO_MAX_ITEMS, tasksByDoc, type TaskBucket, type TaskPriority, type TaskRow } from '../../lib/docTodos'
+import { TODO_MAX_ITEMS, tasksByDoc, type TaskBucket, type TaskPriority, type TaskRow } from '../../lib/panel/docTodos'
 import type { DocTodosView } from './usePanelDocs'
 
 const BUCKET_LABELS: Record<TaskBucket, string> = { overdue: '기한 지남', today: '오늘', upcoming: '예정', none: '날짜 없음' }

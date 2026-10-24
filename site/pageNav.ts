@@ -1,6 +1,6 @@
 // 제목 id·문서 목록·목차·접는 목차 (specs/features/F-2036.md 3~6장). 순수 함수, DOM·node:fs 를 import 하지 않는다
 import { listDocHeadings } from '../src/viewer/headingTarget'
-import { GUIDES_PATH, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
+import { GUIDES_PATH, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/site/siteChrome'
 import { sortGuideEntries, type GuideEntry } from './guidesIndex'
 
 function escapeHtml(value: string): string {

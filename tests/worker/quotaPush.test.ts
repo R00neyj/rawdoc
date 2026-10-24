@@ -10,8 +10,8 @@ vi.mock('../../worker/auth', () => ({
   rememberUser: vi.fn(),
 }))
 
-vi.mock('../../src/lib/pushText', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/pushText')>()
+vi.mock('../../src/lib/push/pushText', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/push/pushText')>()
   return { ...actual, quotaPushPayload: vi.fn(actual.quotaPushPayload) }
 })
 
@@ -21,8 +21,8 @@ import { ATTACHMENT_QUOTA_BYTES, handleUploadAttachment } from '../../worker/att
 import { handleCreateDoc, handleUpdateDoc } from '../../worker/docs'
 import { handleCreateAttachmentV1, handleCreateDocV1 } from '../../worker/v1'
 import { DOC_BYTES_QUOTA, claimQuotaPush, quotaOver, sendQuotaPush } from '../../worker/usage'
-import { quotaPushPayload } from '../../src/lib/pushText'
-import { PUSH_QUOTA_REPEAT_MS } from '../../src/lib/pushPayload'
+import { quotaPushPayload } from '../../src/lib/push/pushText'
+import { PUSH_QUOTA_REPEAT_MS } from '../../src/lib/push/pushPayload'
 
 const NOW = Date.parse('2026-09-30T00:00:00Z')
 const DOC_ID = '33333333-3333-4333-8333-333333333333'

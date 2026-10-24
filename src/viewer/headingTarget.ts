@@ -1,5 +1,5 @@
 // 원문 → 제목 목록·링크 헤딩이 가리키는 줄. 보기 결과의 data-source-line 과 같은 줄 번호를 내려고 renderMarkdown 의 markdown-it 을 쓴다 (specs/features/F-2018.md 7.1·7.2)
-import { findFrontmatter, textAfterFrontmatter } from '../lib/frontmatter'
+import { findFrontmatter, textAfterFrontmatter } from '../lib/markdown/frontmatter'
 import { parseMarkdownTokens } from './renderMarkdown'
 
 export type DocHeading = { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; raw: string; line: number }

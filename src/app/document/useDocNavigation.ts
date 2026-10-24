@@ -1,7 +1,7 @@
 // 문서 이동 — App.tsx 에서 옮김 (F-2082)
 import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../../lib/folderTree'
-import { fromEditorText } from '../../lib/lineEnding'
+import { fromEditorText } from '../../lib/markdown/lineEnding'
 import { KANBAN_NEW_DOC_TEXT } from '../../lib/kanban/kanban'
 import { getPref, setPref } from '../prefs'
 import { e2eeCreateErrorMessage } from '../notices/appNotices'

@@ -1,6 +1,6 @@
 // 모든 응답에 붙는 기본 보안 헤더 3종 + 경로별 CSP (F-4001)
 import { describe, expect, it } from 'vitest'
-import { buildCsp } from '../../src/lib/cspPolicy'
+import { buildCsp } from '../../src/lib/site/cspPolicy'
 import { cspKindOf, withSecurityHeaders } from '../../worker/securityHeaders'
 
 function res(headers?: HeadersInit, status = 200): Response {

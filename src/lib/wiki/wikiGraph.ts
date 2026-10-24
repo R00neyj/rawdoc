@@ -1,6 +1,6 @@
 // 위키링크 관계 뽑기·그래프 만들기·부분 그래프. 순수 함수, DOM·CM6·markdown-it·React·저장소를 import 하지 않는다 (specs/features/F-292.md 3장, architecture.md 1장)
 import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from './wikiLink'
-import { findFrontmatter } from '../frontmatter'
+import { findFrontmatter } from '../markdown/frontmatter'
 import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from './wikiResolve'
 
 // 펜스 코드블록 여닫기 (3.2). 줄 앞 공백은 몇 칸이든, 목록 항목 안(`2. ```)이어도 펜스로 본다

@@ -1,7 +1,7 @@
 // 문서 방 알람의 댓글 푸시 모아 보내기 — 모으기·빼기·예산·보내기·결과 batch, "열어 둠" (specs/features/F-3006.md 4·5장)
-import { PUSH_PRESENCE_FRESH_MS, PUSH_SENDS_PER_RUN_MAX, PUSH_STALE_MS } from '../src/lib/pushPayload'
-import { commentPushPayload } from '../src/lib/pushText'
-import type { PushCommentRow } from '../src/lib/pushText'
+import { PUSH_PRESENCE_FRESH_MS, PUSH_SENDS_PER_RUN_MAX, PUSH_STALE_MS } from '../src/lib/push/pushPayload'
+import { commentPushPayload } from '../src/lib/push/pushText'
+import type { PushCommentRow } from '../src/lib/push/pushText'
 import type { NotificationKind } from '../src/lib/comments/docComments'
 import { listLivePushSubscriptions, pushResultStatements } from './pushServer'
 import type { LivePushSubscription } from './pushServer'

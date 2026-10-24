@@ -4,8 +4,8 @@ import type { EditorState, Extension, Range as CMRange } from '@codemirror/state
 import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 
-import { findInlineMath } from '../../lib/mathSyntax'
-import { renderMath, requestRemeasureOnFontsReady } from '../../lib/mathRender'
+import { findInlineMath } from '../../lib/markdown/mathSyntax'
+import { renderMath, requestRemeasureOnFontsReady } from '../../lib/markdown/mathRender'
 import { enterOnClick } from './blocks'
 import { isEditorFocused, selectionTouches } from './active'
 import { isOpaquePosition } from './wikiLinks'

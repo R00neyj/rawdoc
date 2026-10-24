@@ -1,7 +1,7 @@
 // F-278.md 7장 A1~A14 — 마크다운 원문 → 평문 변환 규칙
 import { describe, expect, it } from 'vitest'
 import { toPlainText } from '../../../src/viewer/toPlainText'
-import { buildImageBlock } from '../../../src/lib/imageBlock'
+import { buildImageBlock } from '../../../src/lib/image/imageBlock'
 
 describe('toPlainText — 제목·문단 (A1)', () => {
   it('# 없이 인라인 글자만, 앞뒤 빈 줄은 블록 잇기로 생긴다', () => {

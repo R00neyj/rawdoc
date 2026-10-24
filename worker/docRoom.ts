@@ -18,7 +18,7 @@ import type { AwarenessClocks, RelayConn } from './awarenessRelay'
 import { CONNECTED_AT_KEY, DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, isReadOnlyState, mayRelayAwareness, readConnState } from './docRoomCore'
 import type { RoomCommentImport, RoomCommentImportResult, RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 import { readForwardedIdentity } from './docSocket'
-import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtocol'
+import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/live/docRoomProtocol'
 
 // abort 가 닫기 프레임보다 먼저 가면 클라이언트는 4404 대신 1006 을 받는다 (2026-09-24 로컬 확인)
 const PURGE_CLOSE_GRACE_MS = 100

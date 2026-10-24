@@ -1,5 +1,5 @@
 // 로컬 인증 모드·개발 우회·Origin 판정 — vi.mock('./auth') 에 걸리지 않게 auth.ts 밖에 둔다 (specs/features/F-2033.md 5장)
-import { SITE_URL } from '../src/lib/siteMeta'
+import { SITE_URL } from '../src/lib/site/siteMeta'
 
 // wrangler types 는 vars 를 리터럴 타입으로 만든다 — 로컬 .dev.vars 값이 들어오므로 string 으로 넓혀 읽는다
 export function readVar(

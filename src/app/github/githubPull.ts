@@ -1,6 +1,6 @@
 // 당기기 원격 해독·안내 문구·크기 판정 — 본 번들 쪽, @codemirror/merge 를 쓰지 않는다 (specs/features/F-2129.md 3.2)
-import { decodeMarkdown } from '../../lib/decodeMarkdown'
-import { fromEditorText, toEditorText, type LineEnding } from '../../lib/lineEnding'
+import { decodeMarkdown } from '../../lib/markdown/decodeMarkdown'
+import { fromEditorText, toEditorText, type LineEnding } from '../../lib/markdown/lineEnding'
 import { decodeGithubContent, githubErrorMessage, type GithubFailure } from './githubUi'
 import { MAX_CONTENT_BYTES } from '../importExport/importWorkspace'
 

@@ -1,7 +1,7 @@
 // 로컬 인증 모드·개발 우회·Origin 판정 (specs/features/F-2033.md 5장, U23·U24)
 import { describe, expect, it } from 'vitest'
 import { isAllowedOrigin, isDevBypass, isLocalAuthMode, needsOriginCheck } from '../../worker/origin'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 
 const SITE_ORIGIN = new URL(SITE_URL).origin
 const LOCAL = 'http://localhost:8790'

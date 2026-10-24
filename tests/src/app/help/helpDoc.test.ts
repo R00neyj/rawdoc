@@ -11,11 +11,11 @@ import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../../../src/app/wiki/wikiPreview
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../../src/lib/comments/docComments'
 import { RETAIN_MS } from '../../../../src/storage/yjsStore'
 import { MAX_CONTENT_BYTES } from '../../../../src/app/importExport/importWorkspace'
-import { PUSH_BATCH_MS, PUSH_QUOTA_RATIO } from '../../../../src/lib/pushPayload'
+import { PUSH_BATCH_MS, PUSH_QUOTA_RATIO } from '../../../../src/lib/push/pushPayload'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../../src/app/importExport/attachImages'
 import { SHORTCUT_CATALOG, formatChord } from '../../../../src/app/shortcuts/shortcutCatalog'
-import { TODO_MAX_ITEMS } from '../../../../src/lib/docTodos'
-import { CALENDAR_DEFAULT_FORMAT } from '../../../../src/lib/calendar'
+import { TODO_MAX_ITEMS } from '../../../../src/lib/panel/docTodos'
+import { CALENDAR_DEFAULT_FORMAT } from '../../../../src/lib/panel/calendar'
 import { DEFAULT_TASK_FILTER } from '../../../../src/app/rightPanel/useTaskFilter'
 import { MAX_TABS } from '../../../../src/app/panes/docTabs'
 import { MAX_PANES } from '../../../../src/app/panes/splitLayout'
@@ -346,7 +346,7 @@ describe('도움말 ## 계정 절', () => {
 
 // 사용법 글 cli 의 도움말 절 (write-guide, 2026-10-03) — 쓰기 한도 수치는 tests/worker/guideLimits.test.ts
 describe('도움말 ## 명령줄 도구 절', () => {
-  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf-8')
 
   it('## 계정 바로 뒤·## 단축키 앞에 있고, 사용법 글 줄로 끝나며, 명령·화면 글자가 코드와 같다', () => {
     const names = appSections().map((s) => s.name)
@@ -379,7 +379,7 @@ describe('도움말 ## 명령줄 도구 절', () => {
 
 // 사용법 글 ai-connectors 의 도움말 절 (write-guide, 2026-10-16) — 쓰기 한도 수치는 tests/worker/guideLimits.test.ts
 describe('도움말 ## AI 앱 연결 절', () => {
-  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf-8')
 
   it('## 명령줄 도구 바로 뒤·## 단축키 앞에 있고, 사용법 글 줄로 끝나며, 주소·화면 글자가 코드와 같다', () => {
     const names = appSections().map((s) => s.name)

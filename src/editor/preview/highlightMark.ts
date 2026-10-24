@@ -4,7 +4,7 @@ import type { EditorState, Extension, Range as CMRange } from '@codemirror/state
 import { Decoration, EditorView, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 
-import { findHighlights } from '../../lib/highlightSyntax'
+import { findHighlights } from '../../lib/markdown/highlightSyntax'
 import { activeLines, isEditorFocused } from './active'
 import { isOpaquePosition } from './wikiLinks'
 import { isComposing, isForced } from '../composition'

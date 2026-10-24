@@ -1,10 +1,10 @@
 // 편집 모드 이미지 블록 위젯 (specs/features/F-157.md). 위치는 위젯이 들고 있지 않고(F-106 2.1), 상호작용 시점에 view.posAtDOM(wrap) 으로 역산한다(F-106 2.3 과 같은 방식)
 import { EditorView, WidgetType } from '@codemirror/view'
 
-import type { ImageAlign, ParsedImageBlock } from '../../lib/imageBlock'
-import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../../lib/imageBlock'
-import { imageLineAlignChange, imageLineWidthChange } from '../../lib/imageMarkdown'
-import { createAttachmentUrl, revokeAttachmentUrl } from '../../lib/attachmentUrls'
+import type { ImageAlign, ParsedImageBlock } from '../../lib/image/imageBlock'
+import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../../lib/image/imageBlock'
+import { imageLineAlignChange, imageLineWidthChange } from '../../lib/image/imageMarkdown'
+import { createAttachmentUrl, revokeAttachmentUrl } from '../../lib/image/attachmentUrls'
 import { observeHeight, stopObservingHeight } from './blocks'
 import { attachImageMove, type MoveWrap } from './imageDrag'
 

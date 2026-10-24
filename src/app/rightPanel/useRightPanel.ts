@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react'
 import { getPref, setPref } from '../prefs'
 import { useTaskFilter, type TaskFilterSettings } from './useTaskFilter'
-import type { TaskFilter } from '../../lib/docTodos'
+import type { TaskFilter } from '../../lib/panel/docTodos'
 import {
   cycleSlotView,
   filterSlots,
@@ -14,7 +14,7 @@ import {
   type PanelItems,
   type PanelSlot,
   type SlotViews,
-} from '../../lib/panelSlots'
+} from '../../lib/panel/panelSlots'
 
 export type PanelViewId = 'calendar' | 'graph' | 'links' | 'todos'
 

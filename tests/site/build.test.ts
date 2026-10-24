@@ -4,8 +4,8 @@ import { buildSite } from '../../site/build'
 import { HELP_CONTENT_PATH } from '../../site/helpPage'
 import { GUIDES_INDEX_PATH } from '../../site/guidesIndex'
 import brand from '../../brand.config'
-import { SITE_NAV, SITE_FOOTER_LINKS } from '../../src/lib/siteChrome'
-import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../../src/lib/pageTheme'
+import { SITE_NAV, SITE_FOOTER_LINKS } from '../../src/lib/site/siteChrome'
+import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../../src/lib/site/pageTheme'
 
 const builtAt = new Date('2026-09-20T00:00:00Z')
 const appCssHref = '/assets/index-abc.css'

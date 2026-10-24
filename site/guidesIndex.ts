@@ -1,5 +1,5 @@
 // 사용법 글 목록은 content/ 에 원본이 없다 — 빌드가 content/guides/*.md 의 프론트매터를 모아 글 하나처럼 만든다 (F-276.md 3장)
-import { findFrontmatter, parseSimpleProperties } from '../src/lib/frontmatter'
+import { findFrontmatter, parseSimpleProperties } from '../src/lib/markdown/frontmatter'
 
 export const GUIDES_INDEX_PATH = 'guides.md'
 export const GUIDES_URL = '/guides'

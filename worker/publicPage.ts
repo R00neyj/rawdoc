@@ -1,8 +1,8 @@
 // 공개 공유 링크(/p/:token, /p/f/:token) 요청에 og/twitter 메타를 문서·폴더별로 주입 (F-238.md 3장)
 import { isValidToken } from './token'
 import { findPublicLink } from './links'
-import { stripComments } from '../src/lib/comments'
-import { SITE_DESCRIPTION } from '../src/lib/siteMeta'
+import { stripComments } from '../src/lib/markdown/comments'
+import { SITE_DESCRIPTION } from '../src/lib/site/siteMeta'
 import brand from '../brand.config'
 
 const DOC_PATH_RE = /^\/p\/([^/]+)$/

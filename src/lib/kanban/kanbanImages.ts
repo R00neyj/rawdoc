@@ -1,6 +1,6 @@
 // 칸반 카드 글자 속 첨부 이미지 문법을 빼내 썸네일 목록으로 — 원문은 바꾸지 않는다 (small 2026-10-24)
-import type { ImageExt } from '../imageBlock'
-import { buildImageLine, imageLineTarget, parseImageLine } from '../imageMarkdown'
+import type { ImageExt } from '../image/imageBlock'
+import { buildImageLine, imageLineTarget, parseImageLine } from '../image/imageMarkdown'
 
 export type CardImage = { id: string; alt: string }
 

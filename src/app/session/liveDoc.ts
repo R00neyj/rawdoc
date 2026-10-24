@@ -1,7 +1,7 @@
 // 실시간 연결 제어기 — 단계·닫기 분류·재연결·첫 동기화 시간 제한·keepalive. 소켓·타이머·난수는 주입받고 window 를 읽지 않는다 (F-305 7장, 재개 가능 세션 F-306 6장)
 import type * as Y from 'yjs'
 
-import { SOCKET_CLOSE, parseDocRoomMessage } from '../../lib/docRoomProtocol'
+import { SOCKET_CLOSE, parseDocRoomMessage } from '../../lib/live/docRoomProtocol'
 import type { LiveSocket, LiveSocketOptions } from '../../storage/liveSocket'
 import type { FallbackReason } from '../document/docPath'
 import type { LiveStatus } from '../topbar/StatusBar'

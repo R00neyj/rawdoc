@@ -1,5 +1,5 @@
 // 어떤 문서 원문에도 없고 24시간 지난 첨부를 매일 지운다 (specs/features/F-219.md 2.1, 2.2, F-402.md 4장, 저장소 그림 대응은 F-3017 3.3)
-import { extractAttachmentRefs } from '../src/lib/imageBlock'
+import { extractAttachmentRefs } from '../src/lib/image/imageBlock'
 import { collectGithubImageRefs, deleteGithubImageRows } from './githubImages'
 
 const PAGE_SIZE = 200

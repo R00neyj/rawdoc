@@ -1,11 +1,11 @@
 // .md·.txt·.html 내보내기, 서식 있는 복사 (specs/features/F-112.md 2.2, F-158.md 2.3, F-278.md 4·5장, F-280.md 4·5장, specs/ia.md 3.8)
 import { zipSync } from 'fflate'
 
-import { toFileName } from '../../lib/filename'
-import { extractAttachmentRefs } from '../../lib/imageBlock'
+import { toFileName } from '../../lib/file/filename'
+import { extractAttachmentRefs } from '../../lib/image/imageBlock'
 import { toPlainText } from '../../viewer/toPlainText'
 import { highlightHtmlWhenReady } from '../../viewer/useCodeHighlight'
-import { renderMermaid } from '../../lib/mermaidRender'
+import { renderMermaid } from '../../lib/markdown/mermaidRender'
 import {
   collectMermaidSources,
   buildExportBody,

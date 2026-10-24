@@ -1,9 +1,9 @@
 // 저장소 그림 리졸버·받아 넣기 — 순수 함수와 의존 주입 (specs/features/F-2131.md 2장·5장)
 import { GITHUB_IMAGE_SOURCES_MAX_PATHS, type GithubImageMap, type GithubImagePut, type GithubImageSource, type GithubImageSources } from '../../lib/github/githubContract'
 import { isRepoMdPath, repoImagePaths, resolveRepoPath } from '../../lib/github/githubPath'
-import type { ImageExt } from '../../lib/imageBlock'
-import { inspectImageBytes } from '../../lib/imageFile'
-import type { ImageTarget, ResolveImagePath } from '../../lib/imageMarkdown'
+import type { ImageExt } from '../../lib/image/imageBlock'
+import { inspectImageBytes } from '../../lib/image/imageFile'
+import type { ImageTarget, ResolveImagePath } from '../../lib/image/imageMarkdown'
 import type { GithubResult } from './githubApi'
 
 export type GithubImageScope =

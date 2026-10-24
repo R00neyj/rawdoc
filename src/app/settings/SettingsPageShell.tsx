@@ -1,7 +1,7 @@
 // 휴대폰 폭 설정 전체화면 껍데기 — 머리줄·1뎁스 목록·2뎁스 틀 (specs/features/F-2114.md 2.2)
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { IconArrowBack, IconChevron, IconClose } from '../icons'
-import { WELCOME_PATH } from '../../lib/siteChrome'
+import { WELCOME_PATH } from '../../lib/site/siteChrome'
 import { openDonateDialog } from '../donate/donateStore'
 import type { SettingsPage } from './settingsPages'
 import { groupSettingsTabs, settingsTabGroupLabel, type SettingsTabId } from './settingsTabs'

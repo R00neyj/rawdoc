@@ -1,7 +1,7 @@
 // OAuth 인가 서버 — worker/index.ts 를 통째로, 실제 better-auth + oauth-provider (specs/features/F-4009.md 4장 A1~A8)
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 import { asAuthDb, asD1, openTestDb } from '../../worker/testD1'
 import { getAuth } from '../../worker/authServer'
 import { secondsUntilUtcMidnight, utcDay } from '../../worker/usage'

@@ -2,8 +2,8 @@
 import { TRIM_NOTIFICATIONS_SQL } from './commentRows'
 import { pushToEmail } from './pushSend'
 import type { VapidAuth } from './webPush'
-import { PUSH_SHARE_DEDUPE_MS } from '../src/lib/pushPayload'
-import { accessRequestPushPayload, type PushShare } from '../src/lib/pushText'
+import { PUSH_SHARE_DEDUPE_MS } from '../src/lib/push/pushPayload'
+import { accessRequestPushPayload, type PushShare } from '../src/lib/push/pushText'
 
 const INSERT_SQL =
   'INSERT INTO notifications (id, recipient_email, kind, doc_id, folder_id, actor_email, doc_title, excerpt, created_at, role) ' +

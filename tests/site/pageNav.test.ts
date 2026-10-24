@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { headingSlug, siteHeadings, addHeadingIds, buildDocNav } from '../../site/pageNav'
 import { renderMarkdown } from '../../src/viewer/renderMarkdown'
 import { HELP_DOC_CONTENT } from '../../src/app/help/helpDoc'
-import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH } from '../../src/lib/siteChrome'
+import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH } from '../../src/lib/site/siteChrome'
 
 describe('F-2036 A1 id 규칙', () => {
   it.each([

@@ -1,6 +1,6 @@
 // /limits — 쓰기 한도 안내. 스크립트 없는 완결 HTML (specs/features/F-2147.md)
 import brand from '../brand.config'
-import { renderSiteFooter, renderSiteHeader, SITE_CHROME_CSS } from '../src/lib/siteChrome'
+import { renderSiteFooter, renderSiteHeader, SITE_CHROME_CSS } from '../src/lib/site/siteChrome'
 import { getUser } from './auth'
 import { errorResponse } from './http'
 import { PAGE_TOKENS_CSS } from './pageTokens'

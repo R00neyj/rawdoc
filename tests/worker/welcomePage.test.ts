@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { renderWelcomePage } from '../../worker/welcomePage'
 import brand from '../../brand.config'
-import { APP_COOKIE, LANDING_DONE_KEY } from '../../src/lib/appEntry'
-import { LANDING_THEME_SCRIPT } from '../../src/lib/pageTheme'
+import { APP_COOKIE, LANDING_DONE_KEY } from '../../src/lib/site/appEntry'
+import { LANDING_THEME_SCRIPT } from '../../src/lib/site/pageTheme'
 
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '')

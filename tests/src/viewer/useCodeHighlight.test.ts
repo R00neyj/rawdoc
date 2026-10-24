@@ -5,8 +5,8 @@ import { renderMarkdown } from '../../../src/viewer/renderMarkdown'
 type Override = ((id: string) => Promise<unknown>) | null
 const state: { override: Override; calls: string[] } = { override: null, calls: [] }
 
-vi.mock('../../../src/lib/codeParsers', async () => {
-  const actual = await vi.importActual<typeof import('../../../src/lib/codeParsers')>('../../../src/lib/codeParsers')
+vi.mock('../../../src/lib/markdown/codeParsers', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/lib/markdown/codeParsers')>('../../../src/lib/markdown/codeParsers')
   return {
     ...actual,
     loadCodeGrammar: (id: string) => {
@@ -28,7 +28,7 @@ function pyBlock(html: string) {
 }
 
 async function realLoad(id: string) {
-  const actual = await vi.importActual<typeof import('../../../src/lib/codeParsers')>('../../../src/lib/codeParsers')
+  const actual = await vi.importActual<typeof import('../../../src/lib/markdown/codeParsers')>('../../../src/lib/markdown/codeParsers')
   return actual.loadCodeGrammar(id as never)
 }
 

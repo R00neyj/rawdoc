@@ -1,7 +1,7 @@
 // 이미지 파일 검사 → 축소 → 저장 → 알림 (specs/features/F-156.md 2.2, F-220.md 2.2, F-406.md 2.2). F-114 importFiles.js 와 같은 자리
-import { inspectImageBytes } from '../../lib/imageFile'
-import { shrinkImage } from '../../lib/shrinkImage'
-import type { ImageExt } from '../../lib/imageBlock'
+import { inspectImageBytes } from '../../lib/image/imageFile'
+import { shrinkImage } from '../../lib/image/shrinkImage'
+import type { ImageExt } from '../../lib/image/imageBlock'
 import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../../lib/vault/e2eeLimits'
 import { isE2eeStoreError } from '../../e2ee/e2eeStore'
 import type { Notice } from '../notices/notice'

@@ -10,7 +10,7 @@ import { createRemoteGate } from '../../../src/editor/remoteGate'
 import type { RemoteGate } from '../../../src/editor/remoteGate'
 import { createYBinding, createYBindingFromState } from '../../../src/editor/yBinding'
 import type { YBinding } from '../../../src/editor/yBinding'
-import { Y_COMMENTS_NAME } from '../../../src/lib/docRoomProtocol'
+import { Y_COMMENTS_NAME } from '../../../src/lib/live/docRoomProtocol'
 
 const DOC = 'doc-1'
 

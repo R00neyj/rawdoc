@@ -1,7 +1,7 @@
 // 창 안 원본 모음 — 링크 없는 문서가 두 칸 이상에 뜨면 네트워크 없는 원본 Y.Doc 을 둔다 (specs/features/F-2161.md 3장·5장)
 import * as Y from 'yjs'
 
-import type { LineEnding } from '../lib/lineEnding'
+import type { LineEnding } from '../lib/markdown/lineEnding'
 import { Y_TEXT_NAME } from './yBinding'
 
 export type SourcePane = { editorDoc: Y.Doc; followSource(source: Y.Doc): void }

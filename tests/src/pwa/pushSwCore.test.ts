@@ -168,10 +168,10 @@ describe('파일 계약 — U6', () => {
     expect(block).toContain('Cache-Control: no-cache')
   })
 
-  it('④ pushSwCore.ts 는 ../lib/pushPayload 하나만 import 한다', () => {
+  it('④ pushSwCore.ts 는 ../lib/push/pushPayload 하나만 import 한다', () => {
     const source = readFileSync(join(ROOT, 'src', 'pwa', 'pushSwCore.ts'), 'utf-8')
     const froms = [...source.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)].map((m) => m[1])
     const bare = [...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1])
-    expect([...froms, ...bare]).toEqual(['../lib/pushPayload'])
+    expect([...froms, ...bare]).toEqual(['../lib/push/pushPayload'])
   })
 })

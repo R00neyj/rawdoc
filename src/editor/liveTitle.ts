@@ -1,7 +1,7 @@
 // 편집기 Doc 의 title Y.Text 쓰기·원격 변경 듣기 — 게이트가 방 Doc 으로 중계한다 (specs/features/F-305.md 9.3)
 import type * as Y from 'yjs'
 
-import { Y_TITLE_NAME } from '../lib/docRoomProtocol'
+import { Y_TITLE_NAME } from '../lib/live/docRoomProtocol'
 import { diffText, rebaseExternal } from '../lib/textRebase'
 import type { TextEdit } from '../lib/textRebase'
 

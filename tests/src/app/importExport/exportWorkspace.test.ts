@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { unzipSync } from 'fflate'
 import { planWorkspaceExport, exportWorkspace, selectExportScope, downloadWorkspaceExport, type WorkspaceExportStore, type WorkspaceExportSourceStore } from '../../../../src/app/importExport/exportWorkspace'
-import { fromEditorText } from '../../../../src/lib/lineEnding'
+import { fromEditorText } from '../../../../src/lib/markdown/lineEnding'
 import type { Doc, Folder } from '../../../../src/types'
 
 vi.mock('../../../../src/app/importExport/exportDoc', () => ({ downloadBlob: vi.fn() }))

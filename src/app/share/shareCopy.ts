@@ -1,7 +1,7 @@
 // 공유 메뉴·명령 팔레트가 함께 쓰는 링크 복사·마크다운 복사 — ShareMenu.tsx 에서 옮김, 순수 함수 (F-2054 6.2)
 import { encodeShare, type ShareDoc } from '../../lib/share/shareCodec'
-import { extractAttachmentRefs } from '../../lib/imageBlock'
-import { stripComments } from '../../lib/comments'
+import { extractAttachmentRefs } from '../../lib/image/imageBlock'
+import { stripComments } from '../../lib/markdown/comments'
 import { formatShareHash } from '../routing/hashRoute'
 import type { Notice } from '../notices/notice'
 

@@ -1,8 +1,8 @@
 // 원문 → 단독 HTML 문서·서식 있는 복사용 HTML. 순수 함수, DOM 없이 문자열만 손본다 (specs/features/F-280.md 3·4·5장, 3.1)
 import { renderMarkdown, parseMarkdownTokens } from './renderMarkdown'
-import { stripComments } from '../lib/comments'
-import { findFrontmatter, textAfterFrontmatter } from '../lib/frontmatter'
-import { isMermaidInfo } from '../lib/codeLang'
+import { stripComments } from '../lib/markdown/comments'
+import { findFrontmatter, textAfterFrontmatter } from '../lib/markdown/frontmatter'
+import { isMermaidInfo } from '../lib/markdown/codeLang'
 
 export type ExportMermaid = { svg: string } | { error: string }
 

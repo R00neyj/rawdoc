@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
 
 import { COMMENT_OPS_PER_MINUTE, REPLIES_PER_THREAD_MAX, isCommentId, validateCommentEntry, type CommentEntry } from '../../../../src/lib/comments/docComments'
-import { encodeCommentOp, encodeCommentOpReply, type CommentOp, type CommentOpRejectReason } from '../../../../src/lib/docRoomProtocol'
+import { encodeCommentOp, encodeCommentOpReply, type CommentOp, type CommentOpRejectReason } from '../../../../src/lib/live/docRoomProtocol'
 import type { CommentDraft } from '../../../../src/editor/commentMarks'
 import {
   COMMENT_OP_CLIENT_WINDOW_MS,

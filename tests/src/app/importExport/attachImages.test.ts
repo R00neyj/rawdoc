@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { attachImages, type AttachImagesStore } from '../../../../src/app/importExport/attachImages'
-import type { ImageExt } from '../../../../src/lib/imageBlock'
-import * as shrinkImageModule from '../../../../src/lib/shrinkImage'
+import type { ImageExt } from '../../../../src/lib/image/imageBlock'
+import * as shrinkImageModule from '../../../../src/lib/image/shrinkImage'
 import { E2eeStoreError } from '../../../../src/e2ee/e2eeStore'
 
 function u32be(n: number): number[] {

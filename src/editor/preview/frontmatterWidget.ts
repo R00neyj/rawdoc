@@ -1,7 +1,7 @@
 // 편집 모드 프론트매터 위젯 — 표 DOM (specs/features/F-155.md 2.1), 값 칸 편집 진입(F-2113 2.1·5.1). 자리·원자 범위·커서 보정은 editor/frontmatter.ts 가 맡는다
 import { WidgetType } from '@codemirror/view'
 import type { EditorView } from '@codemirror/view'
-import type { FrontmatterProperty } from '../../lib/frontmatter'
+import type { FrontmatterProperty } from '../../lib/markdown/frontmatter'
 import { observeHeight, stopObservingHeight } from './blocks'
 import { endFrontmatterEdit, frontmatterEditCell, startFrontmatterEdit } from './frontmatterEdit'
 

@@ -1,8 +1,8 @@
 // 전체·폴더 내보내기 — 경로·이름·manifest 계획(순수 함수)과 스트리밍 zip 만들기·내려받기 (specs/features/F-281.md 2·3장)
 import { Zip, ZipPassThrough } from 'fflate'
 
-import { toFileName, toFolderName } from '../../lib/filename'
-import { extractAttachmentRefs } from '../../lib/imageBlock'
+import { toFileName, toFolderName } from '../../lib/file/filename'
+import { extractAttachmentRefs } from '../../lib/image/imageBlock'
 import { descendantFolderIds, type FolderLike } from '../../lib/folderTree'
 import { downloadBlob } from './exportDoc'
 import type { Doc, Folder } from '../../types'

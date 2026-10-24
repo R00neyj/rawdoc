@@ -17,7 +17,7 @@ import {
 import { getPref } from '../prefs'
 import { resetMapIndexCache } from '../map/mapIndex'
 import { resetSearchIndexCache } from '../search/searchIndex'
-import { revokeE2eeAttachmentUrls } from '../../lib/attachmentUrls'
+import { revokeE2eeAttachmentUrls } from '../../lib/image/attachmentUrls'
 import type { TabMessage } from '../session/tabSync'
 import E2eeDialogs, { type E2eeDialogMode } from './E2eeDialogs'
 

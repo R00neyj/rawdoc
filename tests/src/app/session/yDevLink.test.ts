@@ -1,7 +1,7 @@
 // 개발용 두 탭 연결 규칙 (specs/features/F-303.md 9.3, 13.1 A13~A16)
 import { describe, expect, it } from 'vitest'
 
-import { CLAIM_WAIT_MS } from '../../../../src/lib/tabChannel'
+import { CLAIM_WAIT_MS } from '../../../../src/lib/live/tabChannel'
 import { DEV_LINK_LOG_FIRST, initialDevLinkState, reduceDevLink } from '../../../../src/app/session/yDevLink'
 import type { DevLinkAction, DevLinkEvent, DevLinkMessage, DevLinkState } from '../../../../src/app/session/yDevLink'
 

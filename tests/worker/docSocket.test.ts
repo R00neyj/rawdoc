@@ -7,7 +7,7 @@ vi.mock('../../worker/auth', () => ({
 
 import { getUser } from '../../worker/auth'
 import { DOC_ROOM_HEADERS, readForwardedIdentity, resolveDocSocket } from '../../worker/docSocket'
-import { SITE_URL } from '../../src/lib/siteMeta'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
 
 const DOC_ID = '22222222-2222-4222-8222-222222222222'
 const SITE_ORIGIN = new URL(SITE_URL).origin

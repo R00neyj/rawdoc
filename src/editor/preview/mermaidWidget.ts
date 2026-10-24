@@ -1,8 +1,8 @@
 // 편집 모드 Mermaid 다이어그램 블록 위젯 (specs/features/F-258.md 2.3, F-260.md 2.2). F-106 코드블록 패턴을 따르고, 클릭 진입은 blocks.ts 의 enterOnClick 을 그대로 쓴다
 import { EditorView, WidgetType } from '@codemirror/view'
 
-import { renderMermaid } from '../../lib/mermaidRender'
-import type { MermaidResult } from '../../lib/mermaidRender'
+import { renderMermaid } from '../../lib/markdown/mermaidRender'
+import type { MermaidResult } from '../../lib/markdown/mermaidRender'
 import { enterOnClick, observeHeight, stopObservingHeight } from './blocks'
 
 // 주 EditorView → Map<"테마:소스", Promise<결과>> (F-258 2.3, 키에 테마 포함 F-260 2.2) — 같은 소스·테마를 여러 번 렌더링하지 않는다. blocks.ts 의 tracker 가 destroy() 에서 destroyMermaidCache(view) 를 부른다

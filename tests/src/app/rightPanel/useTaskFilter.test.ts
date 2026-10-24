@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_TASK_FILTER } from '../../../../src/app/rightPanel/useTaskFilter'
-import { findOpenTodos, parseTaskFilters } from '../../../../src/lib/docTodos'
+import { findOpenTodos, parseTaskFilters } from '../../../../src/lib/panel/docTodos'
 
 describe('기본 할 일 표시', () => {
   it('설정을 바꾸지 않으면 #task·#할일·#todo 가 붙은 체크박스만 할 일이다', () => {

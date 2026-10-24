@@ -1,7 +1,7 @@
 // 공개 공유 링크 og/twitter 메타 동적 주입 (F-238.md 4장, F-272.md 7.1)
 import { describe, expect, it } from 'vitest'
 import { renderPublicPage } from '../../worker/publicPage'
-import { SITE_DESCRIPTION } from '../../src/lib/siteMeta'
+import { SITE_DESCRIPTION } from '../../src/lib/site/siteMeta'
 import brand from '../../brand.config'
 import { asD1, openTestDb } from '../../worker/testD1'
 

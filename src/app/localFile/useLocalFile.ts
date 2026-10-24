@@ -1,8 +1,8 @@
 // 로컬 파일 하나 — 세션·열기·쓰기·떠나기 (specs/features/F-2155.md 3·4장, 계약 5장)
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { decodeMarkdown, type DecodedMarkdown } from '../../lib/decodeMarkdown'
-import { encodeMarkdown } from '../../lib/encodeMarkdown'
-import { ensureWritePermission, MD_PICKER_OPTIONS } from '../../lib/fileSystemAccess'
+import { decodeMarkdown, type DecodedMarkdown } from '../../lib/markdown/decodeMarkdown'
+import { encodeMarkdown } from '../../lib/markdown/encodeMarkdown'
+import { ensureWritePermission, MD_PICKER_OPTIONS } from '../../lib/file/fileSystemAccess'
 import type { EditorHandle } from '../../editor/Editor'
 import type { LineEnding } from '../../types'
 import type { NoticeWithAction } from '../notices/NoticeBar'

@@ -9,8 +9,8 @@ import {
   encodeCommentOpReply,
   encodeDocRoomMessage,
   parseCommentOp,
-} from '../src/lib/docRoomProtocol'
-import type { CommentOp, CommentOpRejectReason } from '../src/lib/docRoomProtocol'
+} from '../src/lib/live/docRoomProtocol'
+import type { CommentOp, CommentOpRejectReason } from '../src/lib/live/docRoomProtocol'
 import {
   COMMENT_OPS_PER_MINUTE,
   checkCommentCapacity,
@@ -42,9 +42,9 @@ import { createVapidAuth } from './webPush'
 import type { VapidAuth } from './webPush'
 import { PUSH_FOLLOWUP_MS, PUSH_RETRY_MS, presentEmails, runDocPush } from './pushRun'
 import type { DocPushResult, PresenceConn } from './pushRun'
-import { PUSH_BATCH_MS, PUSH_STALE_MS } from '../src/lib/pushPayload'
-import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
-import type { LineEnding } from '../src/lib/lineEnding'
+import { PUSH_BATCH_MS, PUSH_STALE_MS } from '../src/lib/push/pushPayload'
+import { fromEditorText, toEditorText } from '../src/lib/markdown/lineEnding'
+import type { LineEnding } from '../src/lib/markdown/lineEnding'
 import { isWriteBlocked, resolveDocAccess, roleAtLeast } from './access'
 import { rebaseExternal } from '../src/lib/textRebase'
 import type { TextEdit } from '../src/lib/textRebase'

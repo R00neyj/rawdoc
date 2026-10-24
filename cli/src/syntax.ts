@@ -1,7 +1,7 @@
 // syntax 명령 출력 — 앱 도움말과 같은 문법 데이터를 터미널용으로 그린다 (specs/features/F-2118.md 3장)
 import brand from '../../brand.config'
-import { SITE_URL } from '../../src/lib/siteMeta'
-import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup } from '../../src/lib/markdownSyntax'
+import { SITE_URL } from '../../src/lib/site/siteMeta'
+import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup } from '../../src/lib/markdown/markdownSyntax'
 
 // 이 앱에만 있는 문법을 먼저 둔다 — 앞부분만 읽는 도구도 콜아웃·위키링크는 보게
 export const APP_SYNTAX_GROUPS = ['콜아웃', '위키링크', '수식', '다이어그램', '이미지', '프론트매터']

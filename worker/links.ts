@@ -3,7 +3,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
-import { stripComments } from '../src/lib/comments'
+import { stripComments } from '../src/lib/markdown/comments'
 import { buildWikiLinkTable, collectWikiSet, type LoadDoc } from './shareSet'
 import { descendantFolderIds } from '../src/lib/folderTree'
 import { createWikiResolver, type WikiFolderRef } from '../src/lib/wiki/wikiResolve'

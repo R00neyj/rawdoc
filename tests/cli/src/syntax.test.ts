@@ -1,8 +1,8 @@
 // F-2118 A2~A6
 import { describe, expect, it } from 'vitest'
 import brand from '../../../brand.config'
-import { SITE_URL } from '../../../src/lib/siteMeta'
-import { fenceSource, SYNTAX_GROUPS } from '../../../src/lib/markdownSyntax'
+import { SITE_URL } from '../../../src/lib/site/siteMeta'
+import { fenceSource, SYNTAX_GROUPS } from '../../../src/lib/markdown/markdownSyntax'
 import { APP_SYNTAX_GROUPS, renderSyntaxMarkdown, syntaxJson } from '../../../cli/src/syntax'
 
 const md = renderSyntaxMarkdown('9.9.9')

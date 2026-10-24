@@ -4,11 +4,11 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { asD1, openTestDb } from '../../worker/testD1'
 import { cleanupComments } from '../../worker/commentGc'
-import { accessRequestPushPayload as payloadOf } from '../../src/lib/pushText'
+import { accessRequestPushPayload as payloadOf } from '../../src/lib/push/pushText'
 
 vi.mock('../../worker/docRoom', () => ({ DocRoom: class {} }))
-vi.mock('../../src/lib/pushText', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/pushText')>()
+vi.mock('../../src/lib/push/pushText', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/push/pushText')>()
   return { ...actual, accessRequestPushPayload: vi.fn(actual.accessRequestPushPayload) }
 })
 

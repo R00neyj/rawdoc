@@ -1,8 +1,8 @@
 // 연결 문서의 저장소 그림 대응표 — 처음 필요할 때 받고 메모리에만 둔다 (specs/features/F-2131.md 4장)
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GithubImageMap } from '../../lib/github/githubContract'
-import type { ImageExt } from '../../lib/imageBlock'
-import type { ResolveImagePath } from '../../lib/imageMarkdown'
+import type { ImageExt } from '../../lib/image/imageBlock'
+import type { ResolveImagePath } from '../../lib/image/imageMarkdown'
 import type { Store } from '../../types'
 import { getDocGithubImages } from './githubApi'
 import { githubAttachmentOf, githubImageResolver } from './githubImages'

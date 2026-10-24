@@ -1,7 +1,7 @@
 // 열지 않은 문서의 밀린 편집을 올리는 러너 — 한 번에 한 문서씩 방에 붙었다가 synced 면 뗀다. window 를 읽지 않는다 (specs/features/F-306.md 8장)
 import * as Y from 'yjs'
 
-import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../../lib/docRoomProtocol'
+import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../../lib/live/docRoomProtocol'
 import { YJS_LOAD_ORIGIN, type YjsStore } from '../../storage/yjsStore'
 import type { LiveDocController, LiveSnapshot } from './liveDoc'
 import { createMergeTracker } from './liveMerge'

@@ -1,5 +1,5 @@
 // 댓글 코어 — 모양·권한·스레드·멘션·짧은 해시 (specs/features/F-501.md). yjs 를 import 하지 않는다
-import type { RelativePositionJSON } from '../docRoomProtocol'
+import type { RelativePositionJSON } from '../live/docRoomProtocol'
 
 // ----- 2.1 상수 -----
 

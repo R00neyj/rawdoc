@@ -1,9 +1,9 @@
 // 랜딩 페이지 / — GEO 대응을 위해 React 번들 대신 완결된 정적 HTML 문자열을 반환한다 (F-239.md 2장, F-271.md 4장, F-272.md 5.4)
 import brand from '../brand.config'
-import { EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/appEntry'
-import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, WELCOME_PATH } from '../src/lib/siteChrome'
-import { SITE_URL } from '../src/lib/siteMeta'
-import { jsonLdScript, landingGraph } from '../src/lib/structuredData'
+import { EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/site/appEntry'
+import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, WELCOME_PATH } from '../src/lib/site/siteChrome'
+import { SITE_URL } from '../src/lib/site/siteMeta'
+import { jsonLdScript, landingGraph } from '../src/lib/site/structuredData'
 import {
   STORY_BASE_LINES,
   STORY_TERMINAL,
@@ -11,7 +11,7 @@ import {
   STORY_WIKI_NODES,
 } from '../src/welcome/storyDoc'
 import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from './pageTokens'
-import { LANDING_THEME_SCRIPT } from '../src/lib/pageTheme'
+import { LANDING_THEME_SCRIPT } from '../src/lib/site/pageTheme'
 
 const siteUrl = SITE_URL
 const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.name}`

@@ -1,7 +1,7 @@
 // 앱 부팅 시 두 값(md.landingDone·md_app) 쓰기 (specs/features/F-271.md 5장)
 import { describe, expect, it, beforeEach } from 'vitest'
 import { markAppEntry } from '../../../../src/app/boot/markAppEntry'
-import { APP_COOKIE, LANDING_DONE_KEY } from '../../../../src/lib/appEntry'
+import { APP_COOKIE, LANDING_DONE_KEY } from '../../../../src/lib/site/appEntry'
 
 function createMemoryLocalStorage(): Storage {
   const store = new Map<string, string>()

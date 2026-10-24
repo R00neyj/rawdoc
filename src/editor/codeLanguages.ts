@@ -8,9 +8,9 @@ import type { NodeType, SyntaxNode } from '@lezer/common'
 import type { Highlighter } from '@lezer/highlight'
 import type { LRParser } from '@lezer/lr'
 
-import { codeLangId, type CodeLangId } from '../lib/codeLang'
-import { codeTokenHighlighter } from '../lib/codeHighlight'
-import { loadCodeGrammar } from '../lib/codeParsers'
+import { codeLangId, type CodeLangId } from '../lib/markdown/codeLang'
+import { codeTokenHighlighter } from '../lib/markdown/codeHighlight'
+import { loadCodeGrammar } from '../lib/markdown/codeParsers'
 
 // sql·shell 은 cmLanguage 가 자체 주석 자료를 갖는다 (F-2125 2.4·R6)
 export const CODE_COMMENT_TOKENS: Partial<Record<CodeLangId, CommentTokens>> = {

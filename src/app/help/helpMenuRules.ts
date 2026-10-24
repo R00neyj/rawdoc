@@ -1,6 +1,6 @@
 // 사이드바 하단 `도움말 메뉴` 항목 — DOM·React 없는 순수 함수 (F-2090 3.1, 파일명은 HelpMenu.tsx 와 대소문자만 달라 Rules 를 붙인다)
 import brand from '../../../brand.config'
-import { CHANGELOG_PATH, GUIDES_PATH } from '../../lib/siteChrome'
+import { CHANGELOG_PATH, GUIDES_PATH } from '../../lib/site/siteChrome'
 
 export type HelpMenuKey = 'help' | 'guides' | 'changelog' | 'feedback'
 export type HelpMenuEntry = { key: HelpMenuKey; label: string; href: string | null }

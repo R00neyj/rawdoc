@@ -1,5 +1,5 @@
 // 검색 인덱스 만들기·재사용. 순수 데이터만 다룬다 — React·DOM·CM6 를 import 하지 않는다 (specs/features/F-286.md)
-import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter, type FrontmatterProperty } from '../../lib/frontmatter'
+import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter, type FrontmatterProperty } from '../../lib/markdown/frontmatter'
 import type { Doc, Folder, Store } from '../../types'
 
 // 이 모듈이 저장소에서 쓰는 것은 이 둘뿐이다 (F-286.md 3.1)

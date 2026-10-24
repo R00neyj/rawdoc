@@ -1,7 +1,7 @@
 // 개발 빌드 전용 두 탭 연결 — BroadcastChannel 로 같은 문서를 연 탭끼리 Yjs 업데이트를 주고받는다 (specs/features/F-303.md 9장). 운영 빌드에는 실리지 않는다
 import type { YLinkPort, YProviderFactory } from '../../editor/remoteGate'
 import { DEV_YSYNC_NOGATE } from '../../editor/devSyncFlag'
-import { CLAIM_WAIT_MS, newTabId } from '../../lib/tabChannel'
+import { CLAIM_WAIT_MS, newTabId } from '../../lib/live/tabChannel'
 import { claimWins } from './tabSync'
 
 export const DEV_LINK_CHANNEL = 'md-ydev'

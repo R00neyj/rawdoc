@@ -1,5 +1,5 @@
 // 웹 푸시 — VAPID(RFC 8292)·aes128gcm 암호화(RFC 8291)·전송(RFC 8030). 라이브러리 없이 WebCrypto 만 (specs/features/F-3002.md 3장)
-import { encodePushPayload, PUSH_TTL_SEC, VAPID_JWT_TTL_SEC, type PushPayload } from '../src/lib/pushPayload'
+import { encodePushPayload, PUSH_TTL_SEC, VAPID_JWT_TTL_SEC, type PushPayload } from '../src/lib/push/pushPayload'
 
 export type VapidKeys = { privateKey: CryptoKey; publicKey: string }
 export type VapidAuth = { header(audience: string, nowMs: number): Promise<string> }

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, type Dispatch, type RefObject, type SetStat
 import type * as Y from 'yjs'
 import type { LiveEditorOptions } from '../../editor/createEditor'
 import { isEditorRelay } from '../../editor/remoteGate'
-import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../../lib/docRoomProtocol'
+import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../../lib/live/docRoomProtocol'
 import { sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from '../sidebar/docMeta'
 import type { DocPathKind } from '../document/docPath'
 import type { LiveSnapshot } from './liveDoc'

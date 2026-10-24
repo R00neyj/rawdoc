@@ -1,5 +1,5 @@
 // GitHub 파일 → 연결된 새 문서. 의존을 받아 DOM 없이 돈다 (specs/features/F-2128.md 4.4)
-import { decodeMarkdown } from '../../lib/decodeMarkdown'
+import { decodeMarkdown } from '../../lib/markdown/decodeMarkdown'
 import type { GithubFile, GithubLink, GithubLinkPut } from '../../lib/github/githubContract'
 import type { Doc, LineEnding } from '../../types'
 import type { GithubResult } from './githubApi'

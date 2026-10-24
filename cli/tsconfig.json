@@ -15,13 +15,13 @@
     "../brand.config.ts",
     "../src/lib/account/cliLoginUrl.ts",
     "../src/lib/account/cliSeal.ts",
-    "../src/lib/decodeMarkdown.ts",
-    "../src/lib/imageFile.ts",
+    "../src/lib/markdown/decodeMarkdown.ts",
+    "../src/lib/image/imageFile.ts",
     "../src/lib/trash/trash.ts",
-    "../src/lib/lineEnding.ts",
-    "../src/lib/siteMeta.ts",
+    "../src/lib/markdown/lineEnding.ts",
+    "../src/lib/site/siteMeta.ts",
     "../src/lib/folderTree.ts",
-    "../src/lib/markdownSyntax.ts",
+    "../src/lib/markdown/markdownSyntax.ts",
     "../worker/v1Contract.ts"
   ]
 }

@@ -10,8 +10,8 @@ import { asD1, openTestDb } from '../../worker/testD1'
 import { createCommentAnchor } from '../../src/lib/comments/commentAnchor'
 import { COMMENT_BODY_MAX, commentQuote } from '../../src/lib/comments/docComments'
 import type { CommentEntry, CommentRecord } from '../../src/lib/comments/docComments'
-import { COMMENT_OP_MAX_CHARS, parseCommentOpReply } from '../../src/lib/docRoomProtocol'
-import type { CommentOp, CommentOpReply } from '../../src/lib/docRoomProtocol'
+import { COMMENT_OP_MAX_CHARS, parseCommentOpReply } from '../../src/lib/live/docRoomProtocol'
+import type { CommentOp, CommentOpReply } from '../../src/lib/live/docRoomProtocol'
 
 const DOC_ID = '33333333-3333-4333-8333-333333333333'
 const NOW = 1_000_000

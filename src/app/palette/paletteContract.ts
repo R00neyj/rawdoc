@@ -1,7 +1,7 @@
 // 명령 팔레트 등록 계약·거르기 — 순수 함수, DOM·React 없음 (specs/features/F-2022.md 3장, F-2053.md 3·5장)
 import { prepareMatchText, splitMatchTerms, matchTerm, type MatchText, type MatchTerm } from '../../lib/search/hangulMatch'
 import type { TemplateEntry } from '../../lib/templates/templates'
-import type { RecentFileItem } from '../../lib/recentFiles'
+import type { RecentFileItem } from '../../lib/file/recentFiles'
 import type { E2eeStatus } from '../../e2ee/keyring'
 import { filterPaletteDocs, PALETTE_DOC_LIMIT, type PaletteDocIndex } from './paletteDocs'
 import { PALETTE_RECENT_COMMAND_LIMIT } from './paletteMemory'

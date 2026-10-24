@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 
 vi.mock('../../worker/docRoom', () => ({ DocRoom: class {} }))
-vi.mock('../../src/lib/pushText', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/pushText')>()
+vi.mock('../../src/lib/push/pushText', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/push/pushText')>()
   return { ...actual, sharePushPayload: vi.fn(actual.sharePushPayload) }
 })
 
 import worker from '../../worker/index'
 import { asD1, openTestDb } from '../../worker/testD1'
-import { sharePushPayload } from '../../src/lib/pushText'
+import { sharePushPayload } from '../../src/lib/push/pushText'
 
 const ORIGIN = 'http://localhost:8790'
 const OWNER = 'owner@example.com'

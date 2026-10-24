@@ -53,7 +53,7 @@ import { userCssRemeasure } from './userCssRemeasure'
 import { readOnlyChangeGuard } from './readOnlyGuard'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
 import { floatCoverFor } from '../lib/floatCover'
-import type { ResolveImagePath } from '../lib/imageMarkdown'
+import type { ResolveImagePath } from '../lib/image/imageMarkdown'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150

@@ -5,7 +5,7 @@ import { Awareness } from 'y-protocols/awareness'
 
 import { REMOTE_HOLD_CHECK_MS } from '../../../src/editor/remoteGate'
 import { CURSOR_SEND_MS, createCursorSender, createRemoteCursorSync, publishCursor, takeCursorSeat } from '../../../src/editor/remoteCursors'
-import type { PeerCursor } from '../../../src/lib/docRoomProtocol'
+import type { PeerCursor } from '../../../src/lib/live/docRoomProtocol'
 
 const at = (n: number): PeerCursor => ({ anchor: { index: n }, head: { index: n } })
 

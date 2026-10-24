@@ -2,8 +2,8 @@
 import { useSyncExternalStore } from 'react'
 import type { Awareness } from 'y-protocols/awareness'
 
-import { nextPeerList } from '../../lib/peers'
-import type { Peer } from '../../lib/peers'
+import { nextPeerList } from '../../lib/live/peers'
+import type { Peer } from '../../lib/live/peers'
 
 const NO_PEERS: Peer[] = []
 

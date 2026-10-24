@@ -1,6 +1,6 @@
 // 푸시 화면 상태·켜기·끄기·테스트·부팅 다시 알리기 — 순수, 브라우저·fetch·설정은 인자로 받는다 (F-2110)
-import type { PushSubscribeBody } from '../../lib/pushApi'
-import { safePushUrl } from '../../lib/pushPayload'
+import type { PushSubscribeBody } from '../../lib/push/pushApi'
+import { safePushUrl } from '../../lib/push/pushPayload'
 import { PUSH_OPEN_MESSAGE } from '../../pwa/pushSwCore'
 import { parseHash } from '../routing/hashRoute'
 

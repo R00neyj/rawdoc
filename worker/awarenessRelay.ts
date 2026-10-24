@@ -1,6 +1,6 @@
 // 서버 awareness 순수 규칙(도장·크기·되돌림·소유·닫힐 때 지우기). partyserver 류를 import 하지 않는다 — docRoomCore.ts 와 같은 이유 (specs/features/F-307.md 4장)
-import { AWARENESS_STATE_MAX_BYTES, readPeerCursor } from '../src/lib/docRoomProtocol'
-import type { PeerState } from '../src/lib/docRoomProtocol'
+import { AWARENESS_STATE_MAX_BYTES, readPeerCursor } from '../src/lib/live/docRoomProtocol'
+import type { PeerState } from '../src/lib/live/docRoomProtocol'
 
 export const AWARENESS_CLOCKS_KEY = 'awarenessClocks'
 export const MESSAGE_SYNC = 0

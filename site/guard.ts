@@ -1,5 +1,5 @@
 // 사이트 글에 쓸 수 없는 문법 검사 — 걸리면 빌드를 실패시킨다 (specs/features/F-272.md 9장). 가드는 원문(raw) 검사다 — 코드블록 안 문법도 걸린다
-import { findFrontmatter, parseSimpleProperties } from '../src/lib/frontmatter'
+import { findFrontmatter, parseSimpleProperties } from '../src/lib/markdown/frontmatter'
 import { contentUrl } from './pages'
 
 const MERMAID_FENCE_RE = /^ {0,3}`{3,}\s*mermaid\b/im

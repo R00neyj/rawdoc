@@ -8,7 +8,7 @@ import type { Extension } from '@codemirror/state'
 import type { BlockContext } from '@lezer/markdown'
 import type { SyntaxNode } from '@lezer/common'
 
-import { findFrontmatter, parseSimpleProperties } from '../lib/frontmatter'
+import { findFrontmatter, parseSimpleProperties } from '../lib/markdown/frontmatter'
 import { isComposing, isForced } from './composition'
 import { isFrontmatterComposing, trackFrontmatterEdit } from './preview/frontmatterEdit'
 import { FrontmatterWidget } from './preview/frontmatterWidget'

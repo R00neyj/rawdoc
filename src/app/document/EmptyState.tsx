@@ -2,7 +2,7 @@
 import { IconClose, IconFileOpen, IconNoteAdd, IconUpload } from '../icons'
 import { displayDocTitle } from '../sidebar/docMeta'
 import { formatHash } from '../routing/hashRoute'
-import type { RecentFileItem } from '../../lib/recentFiles'
+import type { RecentFileItem } from '../../lib/file/recentFiles'
 
 const MAX_RECENT = 5
 

@@ -2,7 +2,7 @@
 
 import brand from '../../../brand.config'
 import { TRASH_RETENTION_DAYS } from '../../lib/trash/trash'
-import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup, type SyntaxItem } from '../../lib/markdownSyntax'
+import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup, type SyntaxItem } from '../../lib/markdown/markdownSyntax'
 
 export const HELP_DOC_TITLE = '도움말'
 

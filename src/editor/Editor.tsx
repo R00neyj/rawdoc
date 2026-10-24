@@ -10,7 +10,7 @@ import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import type { OnImageFiles } from './imageInsert'
 import type { OnTitleChange, OnTitleCommit } from './docTitle'
-import type { ResolveImagePath } from '../lib/imageMarkdown'
+import type { ResolveImagePath } from '../lib/image/imageMarkdown'
 
 export type EditorHandle = ReturnType<typeof createEditor>
 

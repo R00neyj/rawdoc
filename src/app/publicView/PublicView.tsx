@@ -34,7 +34,7 @@ import { formatPublicFolderHash, formatPublicHash, parseHash } from '../routing/
 import PublicFolderList from './PublicFolderList'
 import PublicBrand from './PublicBrand'
 import { githubAttachmentOf, githubImageResolver } from '../github/githubImages'
-import type { ResolveImagePath } from '../../lib/imageMarkdown'
+import type { ResolveImagePath } from '../../lib/image/imageMarkdown'
 
 const NARROW_QUERY = '(max-width: 1023px)'
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)

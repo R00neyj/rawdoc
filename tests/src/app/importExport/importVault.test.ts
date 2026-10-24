@@ -14,7 +14,7 @@ import {
   type ApplyVaultStore,
 } from '../../../../src/app/importExport/importVault'
 import { planVaultExport, toVaultMarkdown } from '../../../../src/app/importExport/exportVault'
-import { buildImageBlock } from '../../../../src/lib/imageBlock'
+import { buildImageBlock } from '../../../../src/lib/image/imageBlock'
 import type { AttachmentExt, Doc, Folder } from '../../../../src/types'
 
 async function* entriesOf(list: Array<{ name: string; text?: string; bytes?: Uint8Array }>): AsyncGenerator<VaultEntry> {

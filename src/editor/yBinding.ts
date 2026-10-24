@@ -6,7 +6,7 @@ import type { Extension, StateCommand } from '@codemirror/state'
 import { ViewPlugin } from '@codemirror/view'
 import type { KeyBinding } from '@codemirror/view'
 
-import { toEditorText } from '../lib/lineEnding'
+import { toEditorText } from '../lib/markdown/lineEnding'
 import { nextUndoGroup } from './undoGroup'
 import type { UndoGroupState } from './undoGroup'
 

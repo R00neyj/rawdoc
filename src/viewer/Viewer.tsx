@@ -3,10 +3,10 @@
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
 
-import { createCodeCopyButton } from '../lib/codeCopyButton'
-import { displayLangFromClass } from '../lib/codeLang'
-import { renderMermaid } from '../lib/mermaidRender'
-import { createAttachmentUrl, revokeAttachmentUrl } from '../lib/attachmentUrls'
+import { createCodeCopyButton } from '../lib/markdown/codeCopyButton'
+import { displayLangFromClass } from '../lib/markdown/codeLang'
+import { renderMermaid } from '../lib/markdown/mermaidRender'
+import { createAttachmentUrl, revokeAttachmentUrl } from '../lib/image/attachmentUrls'
 import { showPlaceholder, showImage } from './fillMarkdownAssets'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
 

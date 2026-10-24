@@ -1,5 +1,5 @@
 // 사용자 CSS 공식 계약 — 공개 변수·뼈대 훅·본문 훅·상태 속성과 템플릿 생성 (specs/features/F-2093.md)
-import { GUIDES_PATH } from '../siteChrome'
+import { GUIDES_PATH } from '../site/siteChrome'
 
 export type PublicVarGroup = '기본 색' | '파생 색' | '본문' | '코드' | '콜아웃' | '지도 그룹' | '댓글 앵커' | '서체' | '모양'
 export type PublicVar = { name: `--${string}`; group: PublicVarGroup; label: string }

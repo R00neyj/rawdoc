@@ -6,7 +6,7 @@ import encodeJpeg, { init as initJpegEncoder } from '@jsquash/jpeg/encode.js'
 import pngWasm from '@jsquash/png/codec/pkg/squoosh_png_bg.wasm?url&inline'
 import jpegEncWasm from '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url&inline'
 import { toWebpBytes } from '../../../cli/src/webp'
-import { inspectImageBytes } from '../../../src/lib/imageFile'
+import { inspectImageBytes } from '../../../src/lib/image/imageFile'
 
 async function compile(dataUrl: string): Promise<WebAssembly.Module> {
   return WebAssembly.compile(await (await fetch(dataUrl)).arrayBuffer())

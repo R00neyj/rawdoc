@@ -8,7 +8,7 @@ import { copyLineDown, indentMore, moveLineDown, moveLineUp } from '@codemirror/
 import { createCommentAnchor, resolveCommentAnchor } from '../../../src/lib/comments/commentAnchor'
 import { commentQuote } from '../../../src/lib/comments/docComments'
 import type { AnchorRange, CommentAnchor } from '../../../src/lib/comments/docComments'
-import { Y_COMMENTS_NAME } from '../../../src/lib/docRoomProtocol'
+import { Y_COMMENTS_NAME } from '../../../src/lib/live/docRoomProtocol'
 import { forceRecalc } from '../../../src/editor/composition'
 import { REMOTE_HOLD_CHECK_MS } from '../../../src/editor/remoteGate'
 import {
