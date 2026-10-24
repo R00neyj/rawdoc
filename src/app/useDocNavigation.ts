@@ -98,6 +98,7 @@ export type UseDocNavigationResult = {
   closeSharedDoc: () => void
   openDocFromSearch: (id: string, term: string | null) => Promise<void>
   openHelp: () => Promise<void>
+  closeHelp: () => void
   openTrash: () => Promise<void>
   openMap: () => Promise<void>
   closeMap: () => void
@@ -117,6 +118,11 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   const screens = { sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, localFileOpen }
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로 ref 로 우회해 최신 값을 보게 한다 (F-131 3·5장)
   const openWikiLinkRef = useRef<(target: string, heading: string | null) => Promise<void>>(async () => {})
+  // 도움말을 열기 직전 문서 — 열면서 currentDocId 를 같은 렌더에 비우므로 그 전 값이 남는다
+  const helpReturnRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!helpOpen) helpReturnRef.current = currentDocId
+  }, [helpOpen, currentDocId])
 
   // `새 문서로 저장` — 다른 탭에서 지워짐(F-296.md 7.3)·실시간 멈춤(F-305 8장) 공용. 원래 폴더도 지워졌을 수 있어 최상위에 만든다
   async function saveCurrentAsNewDoc() {
@@ -233,7 +239,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     closeSidebarIfNarrow()
   }
 
-  // ----- 로고 클릭 → 홈 (F-232 3.3, F-244 3.3) — 이미 홈이거나 도움말 페이지의 `닫기` 도 이 함수를 그대로 쓴다 -----
+  // ----- 로고 클릭 → 홈 (F-232 3.3, F-244 3.3) — 이미 홈이거나 휴지통 페이지의 `닫기` 도 이 함수를 그대로 쓴다 -----
   async function goHome() {
     if (currentDocId === null && !screenOpen(screens)) return
     await beforeLeaveDoc()
@@ -418,6 +424,19 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     closeSidebarIfNarrow()
   }
 
+  // 도움말 `닫기` — 열기 전 문서로 돌아가 분할·탭 배치도 되살린다(replace). 없었거나 지워졌으면 홈
+  function closeHelp() {
+    const returnId = helpReturnRef.current
+    if (returnId === null || !docs.some((d) => d.id === returnId)) {
+      void goHome()
+      return
+    }
+    leave()
+    focusEditorRef.current = true
+    setCurrentDocId(returnId)
+    replaceHashUrl(returnId)
+  }
+
   // 사이드바 `휴지통` → 전용 페이지로 이동 (F-2145 2장)
   async function openTrash() {
     await beforeLeaveDoc()
@@ -477,6 +496,6 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
 
   return {
     saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createNewSharedDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
-    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
+    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, closeHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   }
 }

@@ -149,3 +149,19 @@ test('F-2164 E3 도움말 화면 동안 칸을 내리고 창 탭 줄은 포커�
   await expect(pane(page, 2).locator('.cm-content')).toContainText('B 본문')
   await expect.poll(() => currentDocId(page)).toBe(idB)
 })
+
+test('도움말 닫기 — 분할 배치로 그대로 돌아온다 (small 2026-10-24)', async ({ page }) => {
+  await asInstalledApp(page)
+  await openApp(page)
+  const { idB } = await twoPanes(page)
+
+  await openHelpFromSidebar(page)
+  await expect(page.locator('.split-pane')).toHaveCount(0)
+  await page.locator('.help-page').getByRole('button', { name: '닫기' }).click()
+  await expect(page.locator('.help-page')).toHaveCount(0)
+  await expect(page.locator('.split-pane')).toHaveCount(2)
+  await expect(focusedPane(page)).toHaveAttribute('data-pane-number', '2')
+  await expect(pane(page, 1).locator('.cm-content')).toContainText('A 본문')
+  await expect(pane(page, 2).locator('.cm-content')).toContainText('B 본문')
+  await expect.poll(() => currentDocId(page)).toBe(idB)
+})

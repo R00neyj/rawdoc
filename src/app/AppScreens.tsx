@@ -30,6 +30,7 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
   Pick<UseSharesPageResult, 'approveRequestRow' | 'busyRequestIds' | 'loginFromShares' | 'rejectRequestRow' | 'revokeShareGrantRow' | 'revokeShareLinkRow' | 'sharesGrants' | 'sharesLinks' | 'sharesLoading' | 'sharesRequests'> &
   Pick<UseContextMenuResult, 'handleViewContextMenu'> & {
     bootPhase: 'booting' | 'ready'
+    closeHelp: () => void
     closeMap: () => void
     closeSharedDoc: () => void
     copyHelpToDoc: () => Promise<void>
@@ -65,7 +66,7 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
   }
 
 export default function AppScreens({
-  account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
+  account, approveRequestRow, bootPhase, busyRequestIds, closeHelp, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
   handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, localFile, localEditorRef, loginFromShares, mapDialogScope, mapRoute, onOpenLocalFile, openHelp, recentFiles,
   openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
   sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice, resolvedTheme, viewMode,
@@ -116,7 +117,7 @@ export default function AppScreens({
       )}
       {!sharedDoc && !sharesOpen && helpOpen && (
         <div className="content-area">
-          <HelpPage onClose={goHome} onCopy={copyHelpToDoc} contentWidth={contentWidthPref} />
+          <HelpPage onClose={closeHelp} onCopy={copyHelpToDoc} contentWidth={contentWidthPref} />
         </div>
       )}
       {!sharedDoc && !sharesOpen && !helpOpen && trashOpen && (

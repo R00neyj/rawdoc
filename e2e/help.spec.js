@@ -8,9 +8,11 @@ async function openHelpPage(page) {
   return page.locator('.help-page')
 }
 
-test('F-244 A4·A7·A8·A9 열기 — 해시 #/help, 코드 복사, 닫기 — 홈으로, 내 문서로 복사', async ({ page, context }) => {
+test('F-244 A4·A7·A8·A9 열기 — 해시 #/help, 코드 복사, 닫기 — 열기 전 문서로, 내 문서로 복사', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await openApp(page)
+  await expect(page).toHaveURL(/#\/d\/.+/)
+  const before = page.url()
   const helpPage = await openHelpPage(page)
   await expect(page).toHaveURL(/#\/help$/)
   await expect(page.locator('.dialog[open]')).toHaveCount(0)
@@ -22,7 +24,7 @@ test('F-244 A4·A7·A8·A9 열기 — 해시 #/help, 코드 복사, 닫기 — �
   expect(clip.replace(/\r\n/g, '\n').trim()).toBe('**굵게**')
 
   await helpPage.getByRole('button', { name: '닫기' }).click()
-  await expect(page).toHaveURL(/#\/$/)
+  await expect(page).toHaveURL(before)
   await expect(page.locator('.help-page')).toHaveCount(0)
 
   const helpAgain = await openHelpPage(page)

@@ -972,7 +972,7 @@ export default function App() {
   const sharedCreate = useSharedFolderCreate({ store, online: syncState?.online !== false, accountBlocked, showNotice, dismissNotice, resyncFromStore, recheckAccount })
   const {
     saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createNewSharedDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
-    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
+    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, closeHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
     store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, viewMode, notifications,
     localFileOpen: localFile.session !== null, closeLocalFile: localFile.closeLocalFile,
@@ -1383,7 +1383,7 @@ export default function App() {
           {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
-            account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
+            account, approveRequestRow, bootPhase, busyRequestIds, closeHelp, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
             goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares, localFile, localEditorRef,
             onOpenLocalFile: openLocalFile, recentFiles, resolvedTheme, viewMode: viewMode as 'live' | 'raw' | 'view',
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
