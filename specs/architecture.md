@@ -25,53 +25,9 @@ src/
     tokens.css           색·서체·크기 토큰. 메인 컬러 hex 는 쓰지 않는다
     app/*.css            레이아웃·컴포넌트 스타일 — 기능별 파일(상단바·사이드바·메인 열·목차·댓글·대화상자·메뉴·오른쪽 패널 등). 각 파일의 미디어 규칙은 파일 끝에 모은다. `phone.css`·`phoneType.css` 는 앞 파일들을 순서로 덮는 휴대폰·터치 덮어쓰기라 뒤쪽에 둔다
     boot.css             부팅 스켈레톤 (F-2015)
-  app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다
-    App.jsx              최상위 상태와 흐름
-                         App.tsx 분할(F-2059) — 구역별 훅·순수 모듈은 아래 파일로 나뉜다. 매핑은 F-2059 5.4
-    appNotices.ts        실시간·금고·옮기기 알림 문구, 금고 옮기기 결과 알림 (F-2060)
-    docMeta.ts           DocMeta·OpenDoc 타입, stripContent·isSharedDoc·sortByUpdatedAtDesc (F-2060)
-    useContextMenu.ts    우클릭 메뉴 상태·열기·닫기·실행 (F-170, F-2061)
-    contextMenuActions.ts 우클릭 메뉴 상태 타입과 순수 판정 (F-2061)
-    useGlobalShortcuts.ts 전역 단축키 창 keydown 6개 (F-2062)
-    globalShortcuts.ts   그 키 판정 (순수 함수, F-2062)
-    useAppearancePrefs.ts 설정값(서체·테마·줄 번호·폭 등) 상태·change*·시스템 테마 구독 (F-2063)
-    useSharesPage.ts     공유 관리 페이지 목록·해제 (F-243, F-2064)
-    exportActions.ts     문서·작업공간·볼트 내보내기와 인쇄 배선, 매 렌더 부르는 팩토리 (F-2065)
-    useSidebarLayout.ts   사이드바 접힘·좁은 창·너비·폴더 펼침(md.openFolders) (F-126, F-159, F-2066)
-    useFolderActions.ts   삭제 확인·폴더 만들기/이름/이동·여러 항목 삭제·이동·상단 고정·폴더로 이동 (F-126, F-132, F-242, F-255, F-2067)
-    useImportFlow.ts     .md·zip·볼트 가져오기, OS 파일 열기, 창 전체 끌어놓기, 이미지 붙여넣기·끌어놓기 저장 (F-114, F-119, F-145, F-156, F-231, F-282, F-2019, F-2068)
-    importResult.ts      가져오기 뒤 편집기 다시 마운트 판정 — 실시간 경로는 건너뜀 (F-305 10.1, F-2068)
-    useNotificationsGlue.ts 알림함 여닫기·항목 이동·안 읽은 점·멘션 후보 원천 (F-507, F-510, F-2069)
-    useLiveNotices.ts 실시간 알림 띠 N1~N10·오프라인 보기 알림 (F-305, F-306, F-2070)
-    liveNotices.ts   알림 띠 판정 순수 함수 — 자기 서버 문서 여부·끊김 문구·멈춤 갈래 (F-2070)
-    useHashRouting.ts hashchange 처리·해시 주소 쓰기 (F-210, F-243, F-244, F-292, F-2071)
-    hashNav.ts       해시 이동 갈래 판정 순수 함수·공개 보기 경로 (F-2071)
-    useEditorSync.ts 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·편집기 layout effect (F-123, F-144, F-295, F-2018, F-2072)
-    useE2eeConvert.ts 문서·폴더 금고로 옮기기·빼기 (F-405, F-407, F-2073)
-    useE2eeMigrate.ts 금고 이관 판정·실행·잠그기·초기화 (F-404, F-408, F-2073)
-    bootFlow.ts      부팅(저장소 열기·목록·첫 화면 판정)·밀린 편집 러너 (F-110, F-111, F-207, F-2015, F-2042, F-306, F-2074)
-    useDocSession.ts 문서 세션(Y.Doc·편집기 연결·경로 판정)·실시간 방 연결 (F-305, F-306, F-2077)
-    useLiveRoomDoc.ts 실시간 방 온라인 재시작·사이드바 updatedAt·편집기 옵션 (F-305, F-506, F-2077)
-    usePaletteOpen.ts 명령 팔레트 열림·닫기 뒤 실행 (F-2022, F-2078)
-    useCommandPalette.ts 팔레트 열기·템플릿 넣기·context 조립 (F-2053, F-2054, F-2055, F-2078)
-    useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
-    useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
-    useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
-    useRightPanel.ts RightPanel.tsx RightPanelSettingsTab.tsx useTaskFilter.ts 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기·접기)·설정 `오른쪽 패널` 탭의 표시할 항목·할 일 표시(전역 필터) (small 2026-10-10, 2026-10-11)
-    useCalendarPanel.ts CalendarDayDocs.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·그날 문서·설정 탭의 달력 묶음 (small 2026-10-10, 2026-10-11)
-    usePanelDocs.ts PanelLinks.tsx PanelTodos.tsx PanelGraph.tsx 오른쪽 패널 `링크`·`할 일`·`그래프` 보기 — 목록 한 번 읽기를 나눠 씀, 백링크·나가는 링크·언급, Tasks 방식 할 일(날짜 묶음), 1단계 2D 미니 그래프(SVG, d3-force-3d 지연 로드) (small 2026-10-11)
-    useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
-    useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
-    useTitleCommit.ts 제목 저장 (F-2079)
-    useCommentFab.ts 댓글 달기 버튼 위치 (F-2079)
-    useDocNavigation.ts 문서 열기·새 문서·홈·위키링크·도움말·지도·공유 보기 이동 (F-131, F-243, F-244, F-292, F-2082)
-    AppTopBar.tsx AppScreens.tsx DocumentArea.tsx AppDialogs.tsx ImportFileInputs.tsx  App JSX 를 나눈 상태 없는 컴포넌트 (F-2081)
-    TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
-    Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
-    hashRoute.js         해시 URL 해석·생성 (순수 함수)
-    notice.js            알림 띠 규칙 (순수 함수)
-    prefs.js             localStorage 설정
-    bootPaint.ts         첫 페인트 전 머리 스크립트 문자열·스켈레톤 걷기 (F-2015)
+  app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다. 기능마다 하위 폴더 (2026-10-25 사용자) — 파일별 역할은 `specs/files.md`, 새 파일은 맞는 기능 폴더에 둔다
+    App.tsx AppDialogs.tsx AppScreens.tsx Dialog.tsx icons.tsx prefs.ts usePresence.ts   뼈대. 루트에 남는 파일은 이것뿐 (App.tsx 분할은 F-2059)
+    kanban/ github/ share/ comments/ map/ importExport/ settings/ appearance/ account/ vault/ panes/ session/ palette/ localFile/ phone/ sidebar/ topbar/ rightPanel/ notifications/ notices/ trash/ help/ search/ templates/ userCss/ wiki/ publicView/ contextMenu/ shortcuts/ boot/ routing/ donate/ document/   기능 폴더
   editor/                CM6. React 를 import 하지 않는다 (Editor.jsx 제외)
     createEditor.js      EditorView 생성, 확장 조립
     Editor.jsx           React 래퍼
@@ -85,8 +41,7 @@ src/
   viewer/                보기 모드 (F-123). 마크다운 → HTML. editor 를 import 하지 않는다
     renderMarkdown.js    markdown-it 설정 (순수 함수)
     Viewer.jsx viewer.css
-  lib/                   순수 함수. DOM·React·CM6 없음
-    contrast.js lineEnding.js filename.js decodeMarkdown.js folderTree.js
+  lib/                   순수 함수. DOM·React·CM6 없음. 기능 폴더(`kanban/` `github/` `map/` `markdown/` `image/` `live/` `push/` `site/` `userCss/` 등)와 루트 몇 개 (2026-10-25). 테스트는 `tests/src/lib/{폴더}/` 에 같은 경로로 둔다
   pwa/                   (F-115~F-119)
 ```
 
@@ -201,7 +156,7 @@ src/
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
-- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274). `site/guidesIndex.ts` 는 `src/lib/frontmatter.ts` 만 읽는다 (F-276)
+- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/help/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274). `site/guidesIndex.ts` 는 `src/lib/markdown/frontmatter.ts` 만 읽는다 (F-276)
 - 라우터·상태관리·UI 컴포넌트 라이브러리를 들이지 않는다. 아이콘은 `@material-symbols/svg-400` SVG 파일만 쓴다 (2026-09-14 사용자 지정, F-142)
 
 ## 2. 저장소 인터페이스
@@ -343,7 +298,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 | `md.lineBreaks` | `on` \| `off` — 보기 모드·HTML/PDF 내보내기·인쇄에서 한 번 줄바꿈을 `<br>` 로 그릴지(`off` 는 마크다운 표준). 모르는 값은 `on`. 공유 링크·공개 보기는 늘 `on` | `on` | small 2026-10-22 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
-  - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/pageTheme.ts`)도 읽는다 (small 2026-10-12)
+  - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/site/pageTheme.ts`)도 읽는다 (small 2026-10-12)
 
 ## 4.1 M2 추가 설정 키 (2026-09-15)
 
@@ -376,13 +331,13 @@ worker/
   mcp.ts mcpCall.ts mcpReadTools.ts   `POST /mcp` MCP 서버·도구가 `/v1` 핸들러를 부르는 도우미·읽기 도구 (F-3030)
   mcpWriteTools.ts mcpWriteGate.ts    MCP 쓰기 도구·쓰기 관문 (`runWriteGate` 를 도구 오류로) (F-3031)
   mcpTrashTools.ts       MCP 지우기 도구 둘, 휴지통으로 (F-3032)
-  trash.ts               휴지통 보내기(문서·폴더 delete-all)·`/api/trash` 목록·복원·영구 삭제·비우기·30일 만료. 상수·타입은 `src/lib/trash.ts` (F-3023)
+  trash.ts               휴지통 보내기(문서·폴더 delete-all)·`/api/trash` 목록·복원·영구 삭제·비우기·30일 만료. 상수·타입은 `src/lib/trash/trash.ts` (F-3023)
   pageTokens.ts          랜딩·로그인 페이지 공통 색 변수 (F-2033)
   docs.ts folders.ts validate.ts   (F-206)
   links.ts token.ts      (F-210·F-211)
   attachments.ts imageSniff.ts     (F-209)
   access.ts grants.ts    (F-212)
-  accessRequests.ts      링크로 보는 사람의 권한 요청 — 상태·보내기·취소 `/api/access-requests/link/:token`(F-4005), 소유자 승인·거절 `/api/access-requests/:id/approve|reject`·매일 Cron 정리(F-4006), 살아 있는 요청 조건, 지우기 문장. 상수·타입은 `src/lib/accessRequest.ts`. `GET /api/shares` 응답에 `requests`
+  accessRequests.ts      링크로 보는 사람의 권한 요청 — 상태·보내기·취소 `/api/access-requests/link/:token`(F-4005), 소유자 승인·거절 `/api/access-requests/:id/approve|reject`·매일 Cron 정리(F-4006), 살아 있는 요청 조건, 지우기 문장. 상수·타입은 `src/lib/share/accessRequest.ts`. `GET /api/shares` 응답에 `requests`
   requestTokens.ts       조각 링크(S-4)용 요청 전용 토큰 발급 `POST /api/docs/:id/request-token`. 요청 라우트는 `share_links` 다음 `request_tokens` 를 본다 (F-4007)
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
   docWrite.ts            문서 행 조건부 쓰기 한 벌 — `/api`·`/v1` 폴백 PUT 과 DocRoom idle 경로가 같이 씀 (F-308)

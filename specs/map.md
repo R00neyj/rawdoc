@@ -2,7 +2,7 @@
 
 작성일: 2026-09-27
 목적: 와이어프레임 없이 기능부터 쌓았으므로, 지금 있는 페이지·화면·레이어·기능을 한 장에서 본다. 모바일 검수(7장)의 체크리스트 뼈대로 쓴다
-근거: `specs/ia.md` 1~3장, `specs/product.md`, `npm run specs` 목록(2026-09-27), 코드 `src/app/hashRoute.ts`·`worker/index.ts`·`worker/rootRoute.ts`·`src/app/TopBar.tsx`·`src/app/*Menu.tsx`
+근거: `specs/ia.md` 1~3장, `specs/product.md`, `npm run specs` 목록(2026-09-27), 코드 `src/app/routing/hashRoute.ts`·`worker/index.ts`·`worker/rootRoute.ts`·`src/app/topbar/TopBar.tsx`·`src/app/*Menu.tsx`
 갱신: 화면·레이어·진입 경로가 새로 생기거나 없어질 때 main 이 고친다. 세부 동작은 여기 적지 않는다 — 원천은 `ia.md` 와 각 `F-xxx.md`
 
 > 머메이드(Mermaid): 글로 적은 도식을 그림으로 그려 주는 문법. GitHub·VS Code 머메이드 확장·rawdoc 보기 모드(F-258)에서 그림으로 보인다
@@ -46,7 +46,7 @@ flowchart LR
 
 ## 2. 앱 안 화면 — 해시가 정하는 것
 
-`src/app/hashRoute.ts` 의 `HashRoute` 종류와 `ia.md` 1장 화면 번호를 맞춘 것. S-9 는 `App` 을 띄우지 않는 별도 진입이다
+`src/app/routing/hashRoute.ts` 의 `HashRoute` 종류와 `ia.md` 1장 화면 번호를 맞춘 것. S-9 는 `App` 을 띄우지 않는 별도 진입이다
 
 ```mermaid
 flowchart TB

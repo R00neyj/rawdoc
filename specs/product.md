@@ -383,8 +383,8 @@ HTML 내보내기(F-280)는 수식이 들어 있으면 KaTeX CSS 와 글꼴을 �
 
 | 번호 | 내용 |
 | --- | --- |
-| F-285 | 쿼리 파싱·매칭·발췌 순수 함수 (`src/lib/docSearch.ts`) |
-| F-286 | 검색 인덱스 만들기·재사용 (`src/app/searchIndex.ts`) |
+| F-285 | 쿼리 파싱·매칭·발췌 순수 함수 (`src/lib/search/docSearch.ts`) |
+| F-286 | 검색 인덱스 만들기·재사용 (`src/app/search/searchIndex.ts`) |
 | F-287 | 검색 대화상자와 진입점 (사이드바 버튼, `Ctrl+Shift+F`) |
 | F-288 | 안내 문구와 공백 표시 |
 | F-294 | 결과로 연 문서에 검색어 넘기기 (F-261 패널 재사용) |

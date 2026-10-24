@@ -55,5 +55,5 @@ Basis: im-not-ai (https://github.com/epoko77-ai/im-not-ai, `skills/humanize-kore
 ## 6. Check before committing
 
 - Code spans, numbers and headings unchanged: compare `` grep -o '`[^`]*`\|[0-9][0-9.,]*\|^#.*' `` sorted output of `git show HEAD:<file>` and the working file. A file where you added facts on purpose (e.g. a guide catching up to a release) is checked for headings and frontmatter only
-- `npx vitest run tests/site` (plus `tests/src/lib/userCssGuide.test.ts tests/worker/guideLimits.test.ts` when guides changed)
+- `npx vitest run tests/site` (plus `tests/src/lib/userCss/userCssGuide.test.ts tests/worker/guideLimits.test.ts` when guides changed)
 - Report changed-sentence counts and two before/after examples per file
