@@ -76,8 +76,8 @@ describe('buildLines — 제목', () => {
 
   it('Setext 제목의 첫 줄이 그림 한 줄이면 그 줄엔 제목 클래스를 안 붙인다 (요청노트 2026-10-21)', () => {
     const img = '![설명|center|360](attachments/0f3a9c2e7b1d4a58.webp)'
-    expect(lineClasses(build(makeState(`${img}\n-\n\nx`, 0)))).toEqual(['md-setext-plain'])
-    expect(lineClasses(build(makeState(`${img}\n=\n\nx`, 0)))).toEqual(['md-setext-plain'])
+    expect(lineClasses(build(makeState(`${img}\n-\n\nx`, 0)))).toEqual([])
+    expect(lineClasses(build(makeState(`${img}\n=\n\nx`, 0)))).toEqual([])
     const rest = build(makeState(`${img}\n글\n---\n\nx`, 0))
     expect(lineClasses(rest)).toEqual(['md-h2'])
     expect(rest.find((r) => r.value.spec.class)?.from).toBe(img.length + 1)
@@ -87,7 +87,7 @@ describe('buildLines — 제목', () => {
       extensions: [markdown({ base: markdownLanguage }), imagePathsField.init(() => () => ({ id: '0f3a9c2e7b1d4a58', ext: 'png' }))],
     })
     ensureSyntaxTree(withPaths, withPaths.doc.length, 5000)
-    expect(lineClasses(build(withPaths))).toEqual(['md-setext-plain'])
+    expect(lineClasses(build(withPaths))).toEqual([])
   })
 })
 

@@ -254,8 +254,6 @@ export function buildLines(
             for (let n = firstLine; n <= lastContentLine; n++) {
               out.push(lineClassRange(state.doc.line(n), SETEXT_CLASS[node.name]))
             }
-            // 그림 뒤 `-` 만 있으면 제목이 아니니 밑줄 줄도 굵게 두지 않는다 (요청노트 2026-10-22)
-            if (mark && firstLine > lastContentLine) out.push(lineClassRange(state.doc.lineAt(mark.from), 'md-setext-plain'))
             // HeaderMark(밑줄)는 숨기지 않는다
             return
           }

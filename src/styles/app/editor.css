@@ -102,12 +102,14 @@
   --tracking: 0; /* F-141 3.6 */
 }
 
-.md-heading {
+/* 굵기는 제목 줄 안에서만 — 조합 중에 남는 낡은 .md-heading 이 다른 줄을 굵게 하지 않게 (요청노트 2026-10-25) */
+.md-h1 .md-heading,
+.md-h2 .md-heading,
+.md-h3 .md-heading,
+.md-h4 .md-heading,
+.md-h5 .md-heading,
+.md-h6 .md-heading {
   font-weight: 700;
-}
-
-.md-setext-plain .md-heading {
-  font-weight: inherit;
 }
 
 .md-strong {
