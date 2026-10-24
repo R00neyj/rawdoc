@@ -1,7 +1,7 @@
 // 푸시 알림 문구와 알림 제목·발췌 자르기 — Worker·앱 공용 (specs/features/F-3002.md 5장)
 import { PUSH_EXCERPT_CHARS, type PushPayload } from './pushPayload'
-import { formatCount, formatMegabytes } from './usageLimits'
-import type { NotificationKind } from './docComments'
+import { formatCount, formatMegabytes } from './account/usageLimits'
+import type { NotificationKind } from './comments/docComments'
 
 export const NOTIFICATION_TITLE_MAX = 40 // 문구 안 문서 제목 (코드 포인트)
 

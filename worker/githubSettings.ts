@@ -2,7 +2,7 @@
 import { jsonResponse } from './http'
 import { readVar } from './origin'
 import { importTokenKey } from './githubCrypto'
-import { githubMonth, githubQuotaResetAt } from '../src/lib/githubContract'
+import { githubMonth, githubQuotaResetAt } from '../src/lib/github/githubContract'
 
 export type GithubConfig = { clientId: string; clientSecret: string; slug: string; key: CryptoKey; baseUrl: string }
 export type GithubSettings = { enabled: boolean; monthlyLimit: number | null }

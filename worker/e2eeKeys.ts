@@ -3,7 +3,7 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { readJsonLimited } from './docs'
 import { dayUsageStatement, utf8Bytes } from './usage'
-import { E2EE_BUNDLE_MAX_BYTES } from '../src/lib/e2eeLimits'
+import { E2EE_BUNDLE_MAX_BYTES } from '../src/lib/vault/e2eeLimits'
 
 // 묶음 JSON 이 JSON 문자열 안에 들어가면 이스케이프로 두 배 가까이 늘어난다 (3.1)
 const MAX_KEYS_BODY_BYTES = 16_384

@@ -79,12 +79,12 @@ export const PUBLIC_VARS: readonly PublicVar[] = [
 
 const MENU_FILES = [
   'src/app/ContextMenu.tsx',
-  'src/app/AccountMenu.tsx',
+  'src/app/account/AccountMenu.tsx',
   'src/app/EditorToolbar.tsx',
   'src/app/ExportMenu.tsx',
   'src/app/FolderMenu.tsx',
   'src/app/HelpMenu.tsx',
-  'src/app/ShareMenu.tsx',
+  'src/app/share/ShareMenu.tsx',
   'src/app/ToolbarCategoryMenu.tsx',
   'src/app/ViewModeMenu.tsx',
 ]
@@ -105,12 +105,12 @@ export const CHROME_HOOKS: readonly ChromeHook[] = [
   { value: 'viewer', label: '보기 모드 본문 틀', files: ['src/viewer/Viewer.tsx'] },
   { value: 'print', label: '인쇄 영역', files: ['src/app/App.tsx'] },
   { value: 'outline', label: '목차', files: ['src/app/Outline.tsx', 'src/app/OutlinePanel.tsx'] },
-  { value: 'comments', label: '댓글 — 옆 레일·휴대폰 판', files: ['src/app/CommentRailPanel.tsx'] },
+  { value: 'comments', label: '댓글 — 옆 레일·휴대폰 판', files: ['src/app/comments/CommentRailPanel.tsx'] },
   { value: 'dialog', label: '대화상자 — 설정·팔레트·검색 포함', files: ['src/app/Dialog.tsx'] },
   { value: 'menu', label: '메뉴 — 우클릭·드롭다운', files: MENU_FILES },
   { value: 'notice', label: '알림 띠', files: ['src/app/NoticeBar.tsx'] },
   { value: 'home', label: '홈 화면', files: ['src/app/EmptyState.tsx'] },
-  { value: 'map', label: '지도 화면 — 캔버스 안은 CSS 가 닿지 않습니다', files: ['src/app/MapPage.tsx'] },
+  { value: 'map', label: '지도 화면 — 캔버스 안은 CSS 가 닿지 않습니다', files: ['src/app/map/MapPage.tsx'] },
 ]
 
 const EDIT = ':root:root .cm-editor .cm-line'

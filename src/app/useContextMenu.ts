@@ -15,7 +15,7 @@ import {
   type ContextMenuState,
 } from './contextMenuActions'
 import type { NoticeWithAction } from './NoticeBar'
-import type { UseDocCommentsResult } from './useDocComments'
+import type { UseDocCommentsResult } from './comments/useDocComments'
 
 export type UseContextMenuOptions = {
   editorRef: RefObject<EditorHandle | null>

@@ -1,8 +1,8 @@
 // 상단바 ⋯ 의 `알림` 하위 화면 본문 (specs/features/F-507.md 3.4, small 2026-10-21)
 import { useEffect, useState, type ReactNode } from 'react'
-import { formatCommentTime } from './commentRail'
+import { formatCommentTime } from './comments/commentRail'
 import { notificationLines } from './notificationsApi'
-import type { InboxNotificationItem } from '../lib/docComments'
+import type { InboxNotificationItem } from '../lib/comments/docComments'
 import type { NotificationsState } from './useNotifications'
 
 export type NotificationsMenuProps = {

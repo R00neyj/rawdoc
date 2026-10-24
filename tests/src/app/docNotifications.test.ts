@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { notificationDocId, unreadNotificationDocIds, unreadNotificationIdsForDoc, foldersWithUnreadDocs } from '../../../src/app/docNotifications'
 import { buildTree, type DocNode, type FolderNode, type TreeNode } from '../../../src/lib/folderTree'
-import type { NotificationItem } from '../../../src/lib/docComments'
+import type { NotificationItem } from '../../../src/lib/comments/docComments'
 
 function item(over: Partial<NotificationItem> = {}): NotificationItem {
   return {

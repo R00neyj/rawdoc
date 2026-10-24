@@ -17,7 +17,7 @@ const COMMENT_QUOTE_MAX = 200
 const CUSTOM_PREFIX = '__YPS:'
 const READ_ONLY_MESSAGE = `${CUSTOM_PREFIX}${JSON.stringify({ type: 'read-only' })}`
 
-// src/lib/docComments.ts commentQuote 와 같은 규칙 — 200자 넘으면 199자(대리쌍 걸치면 198) + '…'
+// src/lib/comments/docComments.ts commentQuote 와 같은 규칙 — 200자 넘으면 199자(대리쌍 걸치면 198) + '…'
 function quoteOf(text) {
   if (text.length <= COMMENT_QUOTE_MAX) return text
   let cut = 199

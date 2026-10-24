@@ -9,7 +9,7 @@ import {
   E2EE_SALT_BYTES,
   E2EE_WRAPPED_KEY_BYTES,
   isE2eePasswordLongEnough,
-} from '../lib/e2eeLimits'
+} from '../lib/vault/e2eeLimits'
 import { encodeRecoveryCode, parseRecoveryCode, RECOVERY_CODE_BYTES } from './recoveryCode'
 
 export type E2eeErrorCode =

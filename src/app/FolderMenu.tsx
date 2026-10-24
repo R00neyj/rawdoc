@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Compone
 import { IconMore, IconLink, IconLinkOff, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import MenuItemSkeleton from './MenuItemSkeleton'
-import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './linkApi'
+import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './share/linkApi'
 import type { Notice } from './notice'
 
 export type FolderMenuItem = {

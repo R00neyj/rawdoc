@@ -4,8 +4,8 @@ import { requireUser } from './auth'
 import { readJsonLimited } from './docs'
 import { readNotificationsUsageStatement } from './usage'
 import { isValidUuid } from './validate'
-import { INBOX_NOTIFICATION_KINDS, NOTIFICATIONS_DEFAULT_KINDS, NOTIFICATIONS_LIST_DEFAULT, NOTIFICATIONS_LIST_MAX, NOTIFICATIONS_READ_IDS_MAX } from '../src/lib/docComments'
-import type { InboxNotificationItem, InboxNotificationKind, InboxNotificationsResponse } from '../src/lib/docComments'
+import { INBOX_NOTIFICATION_KINDS, NOTIFICATIONS_DEFAULT_KINDS, NOTIFICATIONS_LIST_DEFAULT, NOTIFICATIONS_LIST_MAX, NOTIFICATIONS_READ_IDS_MAX } from '../src/lib/comments/docComments'
+import type { InboxNotificationItem, InboxNotificationKind, InboxNotificationsResponse } from '../src/lib/comments/docComments'
 
 // UUID 50개 몸통이 약 2,000 B
 export const NOTIFICATIONS_READ_MAX_BODY_BYTES = 8_192

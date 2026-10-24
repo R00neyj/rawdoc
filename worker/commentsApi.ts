@@ -6,8 +6,8 @@ import { readJsonLimited } from './docs'
 import { loadDocPeople } from './docPeople'
 import { importCommentsInRoom } from './docRoomRpc'
 import { dayUsageStatement } from './usage'
-import { COMMENTS_PER_DOC_MAX, parseCommentRecords } from '../src/lib/docComments'
-import type { CommentCountResponse, CommentImportResponse, DocPeopleResponse } from '../src/lib/docComments'
+import { COMMENTS_PER_DOC_MAX, parseCommentRecords } from '../src/lib/comments/docComments'
+import type { CommentCountResponse, CommentImportResponse, DocPeopleResponse } from '../src/lib/comments/docComments'
 
 // 모든 칸을 끝까지 채운 첫 댓글 500개가 4,318,013 B (F-503 t7)
 export const COMMENT_IMPORT_MAX_BODY_BYTES = 5_000_000

@@ -1,7 +1,7 @@
 import type { EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import type { ContextMenuNode } from './contextMenuItems'
-import type { UseDocCommentsResult } from './useDocComments'
+import type { UseDocCommentsResult } from './comments/useDocComments'
 
 // 우클릭 메뉴 상태 (specs/features/F-170.md) — 'editor'|'cell' 은 view·mainView, 'view' 는 container 를 쓴다
 export type ContextMenuState = {

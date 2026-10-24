@@ -1,7 +1,7 @@
 // 설정 `이 기기에서 푸시 받기` 상태·흐름 배선, 부팅 다시 알리기, 서비스 워커 push-open 수신 (F-2110 5장)
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { getPref, setPref } from './prefs'
-import { storedAccount, type AccountState } from './account'
+import { storedAccount, type AccountState } from './account/account'
 import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
 import type { SettingsPush } from './SettingsDialog'

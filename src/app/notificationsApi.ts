@@ -6,7 +6,7 @@ import {
   type InboxNotificationItem,
   type InboxNotificationsResponse,
   type NotificationItem,
-} from '../lib/docComments'
+} from '../lib/comments/docComments'
 import { accessRequestPushPayload, formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../lib/pushText'
 
 export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../lib/pushText' // F-3002 5.4 — 옛 import 그대로

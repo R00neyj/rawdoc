@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { cleanupServerAttachments } from '../../worker/attachmentGc'
 import { findDocAttachment } from '../../worker/attachments'
-import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION } from '../../src/lib/e2eeLimits'
+import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION } from '../../src/lib/vault/e2eeLimits'
 
 type Worker = { fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> }
 type Caller = { user: { id: string; email: string }; clientId: string; clientName: string }

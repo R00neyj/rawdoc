@@ -14,7 +14,7 @@ import type { Notice } from './notice'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { makeViewOutlineHandle } from './viewOutlineHandle'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
-import AccessRequestControl from './AccessRequestControl'
+import AccessRequestControl from './share/AccessRequestControl'
 import { buildExportPayload } from './exportDoc'
 import SettingsDialog from './SettingsDialog'
 import {
@@ -33,7 +33,7 @@ import {
 import { formatPublicFolderHash, formatPublicHash, parseHash } from './hashRoute'
 import PublicFolderList from './PublicFolderList'
 import PublicBrand from './PublicBrand'
-import { githubAttachmentOf, githubImageResolver } from './githubImages'
+import { githubAttachmentOf, githubImageResolver } from './github/githubImages'
 import type { ResolveImagePath } from '../lib/imageMarkdown'
 
 const NARROW_QUERY = '(max-width: 1023px)'

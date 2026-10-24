@@ -2,7 +2,7 @@
 import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
 import type { DocSummary, E2eeCopyResult, E2eeCopySource, ServerStore } from '../storage/serverStore'
 import { toWebp } from '../storage/toWebp'
-import { E2EE_MAX_ATTACHMENT_REFS, isPlainAttachmentTooLarge, isPlainContentTooLarge } from '../lib/e2eeLimits'
+import { E2EE_MAX_ATTACHMENT_REFS, isPlainAttachmentTooLarge, isPlainContentTooLarge } from '../lib/vault/e2eeLimits'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { inspectImageBytes } from '../lib/imageFile'
 import { createDocKey, decryptDocField, encryptDocField, openDocKey, decryptAttachment, encryptAttachment } from './crypto'

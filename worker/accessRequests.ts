@@ -18,7 +18,7 @@ import {
   ACCESS_REQUEST_PENDING_MAX,
   type AccessRequestStatus,
   type AccessRole,
-} from '../src/lib/accessRequest'
+} from '../src/lib/share/accessRequest'
 
 type Target = { type: 'doc' | 'folder'; id: string; ownerId: string; folderId: string | null }
 type RequestRow = { id: string; role: AccessRole; status: 'pending' | 'rejected'; decided_at: number | null; live: number }

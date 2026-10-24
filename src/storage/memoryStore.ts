@@ -1,7 +1,7 @@
 // 메모리 저장소 — 저장소를 못 쓸 때의 대체 (specs/architecture.md 2장, specs/features/F-126.md 3장)
 // B1 은 IndexedDB 가 없으므로 이 저장소로만 동작한다 (F-110 이 idbStore 로 교체)
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 import { restoreFolderId, trashPathOf } from '../lib/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding, FolderDeleteMode } from '../types'
 

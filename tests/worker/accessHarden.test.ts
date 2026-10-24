@@ -5,7 +5,7 @@ import { asD1, openTestDb } from '../../worker/testD1'
 import { ATTACHMENT_QUOTA_BYTES } from '../../worker/attachments'
 import { MAX_TOKENS } from '../../worker/apiTokens'
 import { renderPublicPage } from '../../worker/publicPage'
-import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION } from '../../src/lib/e2eeLimits'
+import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION } from '../../src/lib/vault/e2eeLimits'
 
 type Worker = { fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> }
 let worker: Worker

@@ -4,7 +4,7 @@ import { getUserWithSessionStart } from './auth'
 import { accountCommentDeleteStatements } from './commentRows'
 import { accessRequestDeleteStatements } from './accessRequests'
 import { purgeQuietly } from './purgeJobs'
-import { ACCOUNT_DELETE_FRESH_MS, type AccountDeletePreview } from '../src/lib/accountDeletion'
+import { ACCOUNT_DELETE_FRESH_MS, type AccountDeletePreview } from '../src/lib/account/accountDeletion'
 
 // better-auth 가 >= 로 거절하는 것과 같은 방향 (4.1)
 export function isFreshSession(createdAt: number, now: number): boolean {

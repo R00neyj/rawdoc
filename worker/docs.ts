@@ -33,7 +33,7 @@ import {
   isValidUuid,
   isValidWrappedKey,
 } from './validate'
-import { E2EE_MAX_TITLE_CHARS } from '../src/lib/e2eeLimits'
+import { E2EE_MAX_TITLE_CHARS } from '../src/lib/vault/e2eeLimits'
 import { trashDoc } from './trash'
 
 type ReadJsonResult =

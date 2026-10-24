@@ -38,7 +38,7 @@ function buildHash({ port, state, publicKey, host }) {
   return `${HASH_PREFIX}${port}/${state}/${publicKey}/${host}`
 }
 
-// F-2023 6.2 — v2 봉인 형식을 src/lib/cliSeal.ts 와 독립적으로 한 번 더 구현한다(형식 검증 목적)
+// F-2023 6.2 — v2 봉인 형식을 src/lib/account/cliSeal.ts 와 독립적으로 한 번 더 구현한다(형식 검증 목적)
 const HKDF_INFO_PREFIX = Buffer.from('cli-seal-v2', 'ascii')
 
 function buildHashV2({ port, host, publicKey }) {

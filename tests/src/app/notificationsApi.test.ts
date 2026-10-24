@@ -14,7 +14,7 @@ import {
   shouldFetchNotifications,
   type PendingRead,
 } from '../../../src/app/notificationsApi'
-import type { AccessRequestNotificationItem, NotificationItem, NotificationsResponse, ShareNotificationItem } from '../../../src/lib/docComments'
+import type { AccessRequestNotificationItem, NotificationItem, NotificationsResponse, ShareNotificationItem } from '../../../src/lib/comments/docComments'
 
 function item(over: Partial<NotificationItem> = {}): NotificationItem {
   return {

@@ -5,7 +5,7 @@ import { IconChevron, IconChevronLeft, IconClose, IconRightPanelClose } from './
 import usePresence from './usePresence'
 import PanelLinks from './PanelLinks'
 import PanelTodos from './PanelTodos'
-import PanelGraph from './PanelGraph'
+import PanelGraph from './map/PanelGraph'
 import CalendarDayDocs, { type DayDocsCollapse } from './CalendarDayDocs'
 import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'

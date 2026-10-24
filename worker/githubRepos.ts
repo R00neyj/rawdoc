@@ -5,8 +5,8 @@ import { badBody, readJsonLimited } from './docs'
 import { checkGithubQuota, countGithubUse, loadEnabledGithub, type GithubConfig, type GithubSettings } from './githubSettings'
 import { githubFailureResponse, githubFetch, isGithubFailure } from './githubClient'
 import { MAX_CONTENT_BYTES } from './validate'
-import { encodePathSegments, isBranchName, isRepoDir, isRepoFullName, isRepoMdPath } from '../src/lib/githubPath'
-import type { GithubBranchList, GithubFile, GithubRepo, GithubRepoList, GithubTree, GithubTreeEntry } from '../src/lib/githubContract'
+import { encodePathSegments, isBranchName, isRepoDir, isRepoFullName, isRepoMdPath } from '../src/lib/github/githubPath'
+import type { GithubBranchList, GithubFile, GithubRepo, GithubRepoList, GithubTree, GithubTreeEntry } from '../src/lib/github/githubContract'
 
 export type GithubCtx = { user: AuthUser; config: GithubConfig; settings: GithubSettings }
 

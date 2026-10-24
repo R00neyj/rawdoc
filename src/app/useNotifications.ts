@@ -1,6 +1,6 @@
 // 알림함 훅 — 가져오기 주기·읽음 표시 상태 (specs/features/F-507.md 3.3), 조건부 요청·탭 사이 결과 나누기 (F-2057 4장)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { InboxNotificationItem, InboxNotificationsResponse } from '../lib/docComments'
+import type { InboxNotificationItem, InboxNotificationsResponse } from '../lib/comments/docComments'
 import {
   applyPendingReads,
   dropSettledReads,

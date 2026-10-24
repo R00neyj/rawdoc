@@ -1,6 +1,6 @@
 // 사이드바 — 폴더 트리·항목 메뉴·끌어놓기 이동·고정됨 묶음 (specs/ia.md 2장 B, F-111·F-114·F-121·F-115·F-126·F-132·F-143.md)
-import { sharedFolderGroups, sharedNewDocAllowed } from './sharedFolderCreate'
-import type { SharedNewDocMenu } from './useSharedFolderCreate'
+import { sharedFolderGroups, sharedNewDocAllowed } from './share/sharedFolderCreate'
+import type { SharedNewDocMenu } from './share/useSharedFolderCreate'
 import type { SharedFolderItem } from '../storage/docsApi'
 import {
   useEffect,
@@ -34,7 +34,7 @@ import {
   type SelectionItem,
   type SelectionRow,
 } from './sidebarSelection'
-import { leaveTargetOfDoc, leaveTargetOfFolder, type LeaveShareTarget } from './leaveShare'
+import { leaveTargetOfDoc, leaveTargetOfFolder, type LeaveShareTarget } from './share/leaveShare'
 import {
   IconChevron,
   IconNoteAdd,
@@ -64,16 +64,16 @@ import {
   IconLockOpen,
   IconCommit,
 } from './icons'
-import { ImportMenu } from './GithubMenu'
+import { ImportMenu } from './github/GithubMenu'
 import SidebarMoreMenu from './SidebarMoreMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
 import { openDocInNewTab } from './openInNewTab'
 import { GUIDES_PATH } from '../lib/siteChrome'
-import AccountMenu, { type AccountMenuProps } from './AccountMenu'
+import AccountMenu, { type AccountMenuProps } from './account/AccountMenu'
 import SidebarFooter from './SidebarFooter'
 import type { Notice } from './notice'
-import { visibleOpenFolderIds, type VaultFolderGate } from './vaultVisibility'
+import { visibleOpenFolderIds, type VaultFolderGate } from './vault/vaultVisibility'
 import { startTabDrag } from './useTabDrag'
 
 export { SIDEBAR_ID }
@@ -117,7 +117,7 @@ export type SharedDocLike = {
 // GitHub 연결 진입점 — 기능이 켜졌을 때만 App 이 준다 (F-2128 4.6)
 export type SidebarGithub = { onImport: () => void; onNewFile: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
 
-export type { SharedNewDocMenu } from './useSharedFolderCreate'
+export type { SharedNewDocMenu } from './share/useSharedFolderCreate'
 
 export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
 

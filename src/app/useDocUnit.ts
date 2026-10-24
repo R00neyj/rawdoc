@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject
 import { DEV_YSYNC } from '../editor/devSyncFlag'
 import { countChars, countWords } from '../editor/stats'
 import type { E2eeStatus } from '../e2ee/keyring'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 import type { ServerStore } from '../storage/serverStore'
 import type { YjsStore } from '../storage/yjsStore'
 import type { Doc, Store } from '../types'

@@ -1,5 +1,5 @@
 // 매일 Cron 댓글·알림 안전망 정리 (specs/features/F-502.md 10장). 지운 행은 누계에서 빼지 않는다 — recount 몫
-import { NOTIFICATION_RETAIN_DAYS, NOTIFICATIONS_PER_RECIPIENT_MAX } from '../src/lib/docComments'
+import { NOTIFICATION_RETAIN_DAYS, NOTIFICATIONS_PER_RECIPIENT_MAX } from '../src/lib/comments/docComments'
 import { TRIM_BY_CUT_DELETE, nthNotificationIdSql, notifRevBeforeDeleteSql } from './commentRows'
 
 const DAY_MS = 24 * 60 * 60 * 1000

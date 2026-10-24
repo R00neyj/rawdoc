@@ -7,7 +7,7 @@ import {
   e2eeCreateErrorMessage,
 } from '../../../src/app/appNotices'
 import { E2eeStoreError } from '../../../src/e2ee/e2eeStore'
-import { ACCOUNT_BLOCKED_MESSAGE, formatResetTime } from '../../../src/lib/usageLimits'
+import { ACCOUNT_BLOCKED_MESSAGE, formatResetTime } from '../../../src/lib/account/usageLimits'
 import type { E2eeConvertOutcome, E2eeConvertStopReason } from '../../../src/e2ee/convert'
 
 const done = (o: Partial<{ done: number; keptAttachments: number; purgeFailed: number }> = {}): E2eeConvertOutcome => ({

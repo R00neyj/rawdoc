@@ -3,8 +3,8 @@ import type { RefObject } from 'react'
 import { openSearchPanel } from '@codemirror/search'
 import type { EditorHandle } from '../editor/Editor'
 import type { NoticeWithAction } from './NoticeBar'
-import { COMMENT_TEXT } from './useDocComments'
-import type { UseDocCommentsResult } from './useDocComments'
+import { COMMENT_TEXT } from './comments/useDocComments'
+import type { UseDocCommentsResult } from './comments/useDocComments'
 import {
   isFindKey,
   isPaletteKey,

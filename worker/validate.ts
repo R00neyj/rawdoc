@@ -3,9 +3,9 @@ import {
   E2EE_MAX_ATTACHMENT_REFS,
   E2EE_MAX_PLAIN_TITLE_CHARS,
   E2EE_SERVER_MAX_CONTENT_BYTES,
-} from '../src/lib/e2eeLimits'
+} from '../src/lib/vault/e2eeLimits'
 
-// 두 상한의 원본은 src/lib/e2eeLimits.ts — 부르는 곳이 많아 이름만 다시 내보낸다
+// 두 상한의 원본은 src/lib/vault/e2eeLimits.ts — 부르는 곳이 많아 이름만 다시 내보낸다
 export const MAX_CONTENT_BYTES = E2EE_SERVER_MAX_CONTENT_BYTES
 export const MAX_BODY_BYTES = 1_100_000
 export const MAX_TITLE_CHARS = E2EE_MAX_PLAIN_TITLE_CHARS

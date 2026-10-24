@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 import type { DatabaseSync } from 'node:sqlite'
 
-vi.mock('../../src/lib/commentAnchor', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/commentAnchor')>()
+vi.mock('../../src/lib/comments/commentAnchor', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/comments/commentAnchor')>()
   return { ...actual, resolveCommentAnchors: vi.fn(actual.resolveCommentAnchors) }
 })
 
@@ -14,8 +14,8 @@ import type { DoStorageLike } from '../../worker/yStore'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { rowToCommentRecord } from '../../worker/commentRows'
 import type { DocCommentDbRow } from '../../worker/commentRows'
-import { createCommentAnchor, resolveCommentAnchor, resolveCommentAnchors, toCommentRecord } from '../../src/lib/commentAnchor'
-import type { CommentEntry } from '../../src/lib/docComments'
+import { createCommentAnchor, resolveCommentAnchor, resolveCommentAnchors, toCommentRecord } from '../../src/lib/comments/commentAnchor'
+import type { CommentEntry } from '../../src/lib/comments/docComments'
 
 const DOC_ID = '22222222-2222-4222-8222-222222222222'
 const OWNER = { userId: 'owner', email: 'owner@example.com', role: 'owner' as const }

@@ -7,7 +7,7 @@ import { describe, expect, test } from 'vitest'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const SRC = join(ROOT, 'src')
 const CODE = /\.(ts|tsx|js|jsx|mjs)$/
-const MERGE_FILES = ['src/app/githubMerge.ts', 'src/app/GithubPullDialog.tsx']
+const MERGE_FILES = ['src/app/github/githubMerge.ts', 'src/app/github/GithubPullDialog.tsx']
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -48,7 +48,7 @@ describe('F-2129 A3 @codemirror/merge 경계', () => {
   })
 
   test('githubPull.ts(본 번들)는 @codemirror/merge·githubMerge 를 가져오지 않는다', () => {
-    const specs = specifiers(join(SRC, 'app', 'githubPull.ts'), [...STATIC, DYNAMIC])
+    const specs = specifiers(join(SRC, 'app', 'github', 'githubPull.ts'), [...STATIC, DYNAMIC])
     expect(specs.filter((s) => isMerge(s) || isMergeModule(s))).toEqual([])
   })
 })

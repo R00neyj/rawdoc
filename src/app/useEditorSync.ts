@@ -14,8 +14,8 @@ import type { Folder, Store } from '../types'
 import type { ResolveAttachment } from '../viewer/fillMarkdownAssets'
 import type { DocMeta, OpenDoc } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
-import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
-import { sharedAttachmentHint } from './sharedAttachmentHint'
+import { useGithubImages, type GithubImagesHandle } from './github/useGithubImages'
+import { sharedAttachmentHint } from './share/sharedAttachmentHint'
 import { useLineBreaks } from './lineBreaksPref'
 
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)

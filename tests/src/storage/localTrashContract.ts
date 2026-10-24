@@ -1,6 +1,6 @@
 // idb·memory 저장소가 같이 지키는 로컬 휴지통 계약 (small 2026-10-16) — idbStore.test·memoryStore.test 가 부른다
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import type { CommentRecord } from '../../../src/lib/docComments'
+import type { CommentRecord } from '../../../src/lib/comments/docComments'
 import type { Store } from '../../../src/types'
 
 function record(id: string): CommentRecord {

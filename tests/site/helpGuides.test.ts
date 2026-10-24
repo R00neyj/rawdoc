@@ -11,7 +11,7 @@ import {
   E2EE_PBKDF2_ITERATIONS,
   E2EE_MAX_PLAIN_CONTENT_BYTES,
   E2EE_MAX_ATTACHMENT_REFS,
-} from '../../src/lib/e2eeLimits'
+} from '../../src/lib/vault/e2eeLimits'
 import { E2EE_LOCK_MINUTES, E2EE_DEFAULT_LOCK_MINUTES } from '../../src/e2ee/keyring'
 import { E2EE_SERVER_SAVE_INTERVAL_MS } from '../../src/storage/serverStore'
 import { RECOVERY_CODE_BYTES } from '../../src/e2ee/recoveryCode'
@@ -19,13 +19,13 @@ import { buildE2eeConvertDialogText } from '../../src/e2ee/convert'
 import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW } from '../../src/lib/peers'
 import { DISCONNECT_NOTICE_MS } from '../../src/app/liveDoc'
 import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../../src/app/importWorkspace'
-import { E2EE_SERVER_MAX_CONTENT_BYTES } from '../../src/lib/e2eeLimits'
+import { E2EE_SERVER_MAX_CONTENT_BYTES } from '../../src/lib/vault/e2eeLimits'
 import { RETAIN_MS } from '../../src/storage/yjsStore'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../../src/app/attachImages'
 import { MAX_SIDE } from '../../src/lib/shrinkImage'
 import { GRACE_MS } from '../../src/app/attachmentGc'
 import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../../src/lib/docSearch'
-import { ACCOUNT_DELETE_FRESH_MS } from '../../src/lib/accountDeletion'
+import { ACCOUNT_DELETE_FRESH_MS } from '../../src/lib/account/accountDeletion'
 import {
   COMMENT_BODY_MAX,
   REPLIES_PER_THREAD_MAX,
@@ -33,11 +33,11 @@ import {
   NOTIFICATIONS_LIST_DEFAULT,
   NOTIFICATION_RETAIN_DAYS,
   NOTIFICATIONS_PER_RECIPIENT_MAX,
-} from '../../src/lib/docComments'
-import { COMMENT_BODY_COUNTER_FROM } from '../../src/app/commentRail'
-import { MENTION_CANDIDATES_MAX } from '../../src/app/mentionCandidates'
+} from '../../src/lib/comments/docComments'
+import { COMMENT_BODY_COUNTER_FROM } from '../../src/app/comments/commentRail'
+import { MENTION_CANDIDATES_MAX } from '../../src/app/comments/mentionCandidates'
 import { NOTIFICATIONS_POLL_MS, notificationLines, notificationText } from '../../src/app/notificationsApi'
-import { COMMENT_TEXT } from '../../src/app/useDocComments'
+import { COMMENT_TEXT } from '../../src/app/comments/useDocComments'
 import { EditorState } from '@codemirror/state'
 import { insertTable, insertCallout, insertMathBlock } from '../../src/editor/insertCommands'
 import { parseTable } from '../../src/editor/preview/tableModel'
@@ -55,25 +55,25 @@ import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } f
 import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
 import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
-import { WARN_RATIO, DANGER_RATIO, HINT_IMAGES, HINT_DOCS } from '../../src/lib/usageGauge'
+import { WARN_RATIO, DANGER_RATIO, HINT_IMAGES, HINT_DOCS } from '../../src/lib/account/usageGauge'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../src/app/wikiPreview'
-import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/accessRequest'
-import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/leaveShare'
+import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/share/accessRequest'
+import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/share/leaveShare'
 import { PUSH_BATCH_MS, PUSH_SHARE_DEDUPE_MS, PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS, PUSH_SUBSCRIPTIONS_PER_USER_MAX } from '../../src/lib/pushPayload'
 import { commentPushPayload } from '../../src/lib/pushText'
 import { pushSettingsView } from '../../src/app/pushClient'
 import { TODO_MAX_ITEMS } from '../../src/lib/docTodos'
-import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/localGraph'
+import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/map/localGraph'
 import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
 import { CALENDAR_DEFAULT_FORMAT } from '../../src/lib/calendar'
 import { DEFAULT_TASK_FILTER } from '../../src/app/useTaskFilter'
 import { PHONE_QUERY } from '../../src/app/usePhoneWidth'
 import { NARROW_QUERY } from '../../src/app/useSidebarLayout'
-import { GITHUB_PUSH_MAX_IMAGES } from '../../src/lib/githubContract'
-import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../src/app/githubImages'
-import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/githubUi'
-import { sameNotice } from '../../src/app/githubPull'
-import { pushedNotice } from '../../src/app/githubPush'
+import { GITHUB_PUSH_MAX_IMAGES } from '../../src/lib/github/githubContract'
+import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../src/app/github/githubImages'
+import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/github/githubUi'
+import { sameNotice } from '../../src/app/github/githubPull'
+import { pushedNotice } from '../../src/app/github/githubPush'
 import { MAX_TABS } from '../../src/app/docTabs'
 import { MAX_PANES, MIN_PANE_PX, RATIO_MAX, RATIO_MIN } from '../../src/app/splitLayout'
 import { PANES_FULL, TABS_FULL } from '../../src/app/paneRules'
@@ -407,7 +407,7 @@ describe('account 글', () => {
     const raw = readGuide('account')
     expect(raw).toContain(`로그인한 지 ${ACCOUNT_DELETE_FRESH_MS / 60_000}분`)
     // 백업 보관 기간은 계정 삭제 창 안내 문구가 원천이다 — 문구가 모듈 밖으로 나오지 않아 원문에서 읽는다
-    const dialogSource = readFileSync(fileURLToPath(new URL('../../src/app/AccountDeleteDialog.tsx', import.meta.url)), 'utf-8')
+    const dialogSource = readFileSync(fileURLToPath(new URL('../../src/app/account/AccountDeleteDialog.tsx', import.meta.url)), 'utf-8')
     const days = /자동 백업에 최대 (\d+)일/.exec(dialogSource)?.[1]
     expect(days).toBeTruthy()
     expect(raw).toContain(`최대 ${days}일`)
@@ -740,7 +740,7 @@ describe('ai-connectors 글', () => {
     expect(raw).toContain('`앱 연결을 계속하려면 로그인하세요.`')
     expect(source('../../src/app/trashView.ts')).toContain('`${name}에서 지움`')
     expect(raw).toContain('`{앱 이름}에서 지움`')
-    expect(source('../../src/app/connectedApps.ts')).toContain('· 아직 사용 안 함')
+    expect(source('../../src/app/account/connectedApps.ts')).toContain('· 아직 사용 안 함')
     expect(raw).toContain('`아직 사용 안 함`')
     expect(source('../../worker/limitsPage.ts')).toContain("'쓰기 제한에 걸렸습니다'")
     expect(raw).toContain('`쓰기 제한에 걸렸습니다`')

@@ -657,7 +657,7 @@ test.describe('F-2006 장력 묶음', () => {
   })
 })
 
-// F-2010 A1(호버 픽셀 차이)은 시각 값, A4 는 F-2004 A5 와 같은 단언이라 e2e 에서 뺐다 — 흐리기 로직은 tests/src/lib/mapFocus.test.ts (2026-09-29 e2e 정리)
+// F-2010 A1(호버 픽셀 차이)은 시각 값, A4 는 F-2004 A5 와 같은 단언이라 e2e 에서 뺐다 — 흐리기 로직은 tests/src/lib/map/mapFocus.test.ts (2026-09-29 e2e 정리)
 
 test.describe('F-2012 카메라 전환', () => {
   test('F-2012 A6 전환 중 사용자 조작이 이긴다', async ({ page }) => {
@@ -791,7 +791,7 @@ test.describe('F-2009 노드 끌기', () => {
   })
 })
 
-// F-2007 A3 은 F-2007 필터 테스트의 첫 단언과, A13·F-2008 A1·A2·A3·A13 은 설정 패널 테스트와 같은 확인이라 뺐다. 필터 판정은 tests/src/lib/mapFilter.test.ts (2026-09-29 e2e 정리)
+// F-2007 A3 은 F-2007 필터 테스트의 첫 단언과, A13·F-2008 A1·A2·A3·A13 은 설정 패널 테스트와 같은 확인이라 뺐다. 필터 판정은 tests/src/lib/map/mapFilter.test.ts (2026-09-29 e2e 정리)
 test.describe('F-2007 지도 설정 패널 필터', () => {
   test.use({ reducedMotion: 'reduce' })
 

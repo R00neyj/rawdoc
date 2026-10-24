@@ -21,7 +21,7 @@ import {
   E2EE_MAX_PLAIN_TITLE_CHARS,
   E2EE_SERVER_MAX_ATTACHMENT_BYTES,
   E2EE_SERVER_MAX_CONTENT_BYTES,
-} from '../../src/lib/e2eeLimits'
+} from '../../src/lib/vault/e2eeLimits'
 
 describe('isValidUuid', () => {
   it('accepts a well-formed uuid', () => {
@@ -189,7 +189,7 @@ describe('F-401 V3 isValidAttachmentRefs', () => {
   })
 })
 
-describe('F-401 V4 상수는 src/lib/e2eeLimits.ts 한 곳에서', () => {
+describe('F-401 V4 상수는 src/lib/vault/e2eeLimits.ts 한 곳에서', () => {
   it('worker 이름이 같은 값', () => {
     expect(MAX_CONTENT_BYTES).toBe(E2EE_SERVER_MAX_CONTENT_BYTES)
     expect(MAX_CONTENT_BYTES).toBe(1_000_000)

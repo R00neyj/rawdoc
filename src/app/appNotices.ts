@@ -2,7 +2,7 @@
 import type { Notice } from './notice'
 import type { E2eeConvertDirection, E2eeConvertOutcome, E2eeConvertStopReason } from '../e2ee/convert'
 import { isE2eeStoreError } from '../e2ee/e2eeStore'
-import { ACCOUNT_BLOCKED_MESSAGE, formatCount, formatResetTime } from '../lib/usageLimits'
+import { ACCOUNT_BLOCKED_MESSAGE, formatCount, formatResetTime } from '../lib/account/usageLimits'
 
 // 읽기 전용 세션의 알림 띠 문구 — N9·N10·N5v (F-506 5.2)
 export const READ_ONLY_LIVE_NOTICE = {

@@ -60,7 +60,7 @@ import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './app/contentWidth
 import { markAppEntry } from './app/markAppEntry'
 import App from './app/App'
 import { DEV_YSYNC } from './editor/devSyncFlag'
-import { CLI_LOGIN_HASH_PREFIX } from './lib/cliLoginUrl'
+import { CLI_LOGIN_HASH_PREFIX } from './lib/account/cliLoginUrl'
 
 // 첫 화면 그리기 전에 반영해 서체가 바뀌며 깜빡이지 않게 한다 (specs/features/F-121.md, F-141)
 document.documentElement.dataset.headingFont = getPref('md.headingFont', 'serif')
@@ -90,7 +90,7 @@ function render() {
 
 // CLI 로그인 화면 — App 을 띄우지 않는다(IndexedDB 를 열지 않고 첫 실행 문서도 심지 않는다). F-2021 6.2
 if (location.hash.startsWith(CLI_LOGIN_HASH_PREFIX)) {
-  import('./app/CliLoginPage').then((module) => {
+  import('./app/account/CliLoginPage').then((module) => {
     const CliLoginPage = module.default
     createRoot(document.getElementById('root')!).render(
       <StrictMode>

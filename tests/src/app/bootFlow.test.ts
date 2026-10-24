@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { decideBootRoute, runBoot, type BootDeps, type BootRouteInput } from '../../../src/app/bootFlow'
 import type { DocUnit } from '../../../src/app/docUnit'
-import { fetchAccount, type AccountState } from '../../../src/app/account'
+import { fetchAccount, type AccountState } from '../../../src/app/account/account'
 import { ACCOUNT_CONFIRM_WAIT_MS } from '../../../src/app/bootList'
 import { openStore } from '../../../src/storage/openStore'
 import { openYjsStore } from '../../../src/storage/yjsStore'
@@ -11,7 +11,7 @@ import { migrateLocalIfNeeded } from '../../../src/app/migrateLocal'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from '../../../src/app/attachmentGc'
 import type { Doc, Store } from '../../../src/types'
 
-vi.mock('../../../src/app/account', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../src/app/account')>()), fetchAccount: vi.fn() }))
+vi.mock('../../../src/app/account/account', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../src/app/account/account')>()), fetchAccount: vi.fn() }))
 vi.mock('../../../src/storage/openStore', () => ({ openStore: vi.fn() }))
 vi.mock('../../../src/storage/yjsStore', () => ({ openYjsStore: vi.fn(() => Promise.resolve(null)) }))
 vi.mock('../../../src/e2ee/e2eeStore', () => ({ withE2ee: vi.fn((store: Store) => store) }))

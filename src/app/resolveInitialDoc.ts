@@ -1,5 +1,5 @@
 // 부팅 시 열 문서를 정하는 순수 함수 (specs/features/F-111.md 2-1)
-import { firstListedDocId } from './vaultVisibility'
+import { firstListedDocId } from './vault/vaultVisibility'
 
 type InitialDocLike = { id: string; e2ee?: 'locked' | 'open' }
 

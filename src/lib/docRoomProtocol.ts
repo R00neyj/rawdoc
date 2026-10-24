@@ -1,5 +1,5 @@
 // 서버(DocRoom)·클라이언트가 같이 쓰는 소켓 계약 (specs/features/F-304.md 11.1). 이름은 저장소 식별자라 제품명과 무관하게 고정
-import { isCommentId } from './docComments'
+import { isCommentId } from './comments/docComments'
 
 export const Y_CONTENT_NAME = 'content'
 export const Y_TITLE_NAME = 'title'

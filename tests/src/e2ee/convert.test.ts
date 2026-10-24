@@ -26,8 +26,8 @@ import {
 } from '../../../src/e2ee/convert'
 import { ApiError } from '../../../src/storage/docsApi'
 import { createDocKey, decryptAttachment, decryptDocField, encryptAttachment, encryptDocField, openDocKey } from '../../../src/e2ee/crypto'
-import { envelopeBase64Length, utf8ByteLength } from '../../../src/lib/e2eeLimits'
-import { nextUtcMidnight } from '../../../src/lib/usageLimits'
+import { envelopeBase64Length, utf8ByteLength } from '../../../src/lib/vault/e2eeLimits'
+import { nextUtcMidnight } from '../../../src/lib/account/usageLimits'
 import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../../../src/types'
 
 type PlanDoc = Pick<Doc, 'id' | 'folderId' | 'e2ee' | 'content' | 'updatedAt'>

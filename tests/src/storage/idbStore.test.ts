@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
 import { createIdbStore, readE2eeRow, writeE2eeRow, markLocalE2eeMigrated } from '../../../src/storage/idbStore'
-import type { CommentRecord } from '../../../src/lib/docComments'
+import type { CommentRecord } from '../../../src/lib/comments/docComments'
 import { runLocalTrashContract } from './localTrashContract'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)

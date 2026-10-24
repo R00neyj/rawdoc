@@ -16,7 +16,7 @@ import {
   readTokenSet,
   type GithubTokenSet,
 } from './githubClient'
-import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubConnectError, type GithubStatus } from '../src/lib/githubContract'
+import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubConnectError, type GithubStatus } from '../src/lib/github/githubContract'
 
 const COOKIE = 'gh_oauth'
 const COOKIE_PATH = '/api/github/'

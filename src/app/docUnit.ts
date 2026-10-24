@@ -2,7 +2,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type * as Y from 'yjs'
 import type { LiveEditorOptions } from '../editor/createEditor'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 import type { Peer } from '../lib/peers'
 import type { Doc, LineEnding } from '../types'
 import type { DocMeta, OpenDoc } from './docMeta'

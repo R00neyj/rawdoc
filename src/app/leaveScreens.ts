@@ -1,6 +1,6 @@
 // 문서 화면 위에 겹쳐 뜨는 전용 화면(공유 보기·공유 관리·도움말·휴지통·지도·로컬 파일) 판정과 한 번에 떠나기 (F-2082, F-2145, F-2155)
 import type { Dispatch, SetStateAction } from 'react'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 
 type MapRoute = { centerDocId: string | null; returnDocId: string | null }
 

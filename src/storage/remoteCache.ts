@@ -2,7 +2,7 @@
 // 버전 2(F-209 2.5): 첨부 blob 캐시 스토어 추가
 import { openDB, type IDBPDatabase } from 'idb'
 import type { AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding } from '../types'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 
 const DEFAULT_DB_NAME = 'md-remote'
 const DB_VERSION = 2

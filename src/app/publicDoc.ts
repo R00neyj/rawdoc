@@ -1,8 +1,8 @@
 // 공개 문서 조회 — 로그인 없이 /pub/docs/{토큰} (specs/features/F-210.md 2.3, 2.4)
 import { flattenFolderTree } from '../lib/folderTree'
 import type { LineEnding } from '../types'
-import type { GithubImageMap } from '../lib/githubContract'
-import { parseGithubImageMap } from './githubImages'
+import type { GithubImageMap } from '../lib/github/githubContract'
+import { parseGithubImageMap } from './github/githubImages'
 
 // github: 연결된 문서의 저장소 그림 대응표, 본문에 있는 경로만 (F-3017 2.6, F-2131 3.4)
 export type PublicDoc = { title: string; content: string; lineEnding: LineEnding; updatedAt: number; github?: GithubImageMap }

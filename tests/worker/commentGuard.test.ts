@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import { planCommentFixes } from '../../worker/commentGuard'
 import type { CommentChange, CommentFix, CommentFixActor } from '../../worker/commentGuard'
-import { validateCommentEntry } from '../../src/lib/docComments'
-import type { CommentAuthor, CommentEntry } from '../../src/lib/docComments'
+import { validateCommentEntry } from '../../src/lib/comments/docComments'
+import type { CommentAuthor, CommentEntry } from '../../src/lib/comments/docComments'
 
 const OWNER: CommentFixActor = { userId: 'owner-id', email: 'owner@example.com', role: 'owner' }
 const ED: CommentFixActor = { userId: 'ed-id', email: 'ed@example.com', role: 'edit' }

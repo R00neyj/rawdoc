@@ -6,8 +6,8 @@ import { beginGithub, fetchGithubContent, invalid, type GithubCtx } from './gith
 import { checkGithubQuota, countGithubUse } from './githubSettings'
 import { githubFailureResponse, githubFetch, isGithubFailure } from './githubClient'
 import { dayUsageStatement } from './usage'
-import { githubBlobUrl, isBranchName, isRepoFullName, isRepoMdPath } from '../src/lib/githubPath'
-import type { GithubLink, GithubPulled } from '../src/lib/githubContract'
+import { githubBlobUrl, isBranchName, isRepoFullName, isRepoMdPath } from '../src/lib/github/githubPath'
+import type { GithubLink, GithubPulled } from '../src/lib/github/githubContract'
 
 type LinkRow = { repo_id: number; repo: string; branch: string; path: string; remote_sha: string | null; remote_bom: number; synced_at: number | null }
 

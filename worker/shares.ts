@@ -2,7 +2,7 @@
 import { jsonResponse } from './http'
 import { requireUser } from './auth'
 import { LIVE_REQUEST_SQL } from './accessRequests'
-import type { AccessRequestRow, AccessRole } from '../src/lib/accessRequest'
+import type { AccessRequestRow, AccessRole } from '../src/lib/share/accessRequest'
 
 type TargetType = 'doc' | 'folder'
 

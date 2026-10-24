@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject
 import type * as Y from 'yjs'
 import type { ServerStore } from '../storage/serverStore'
 import type { YjsStore } from '../storage/yjsStore'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 import type { Peer } from '../lib/peers'
 import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../lib/docRoomProtocol'
 import { countChars, countWords } from '../editor/stats'

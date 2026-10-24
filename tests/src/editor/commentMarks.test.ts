@@ -5,9 +5,9 @@ import { EditorSelection, EditorState } from '@codemirror/state'
 import type { ChangeSpec, Transaction, TransactionSpec } from '@codemirror/state'
 import { copyLineDown, indentMore, moveLineDown, moveLineUp } from '@codemirror/commands'
 
-import { createCommentAnchor, resolveCommentAnchor } from '../../../src/lib/commentAnchor'
-import { commentQuote } from '../../../src/lib/docComments'
-import type { AnchorRange, CommentAnchor } from '../../../src/lib/docComments'
+import { createCommentAnchor, resolveCommentAnchor } from '../../../src/lib/comments/commentAnchor'
+import { commentQuote } from '../../../src/lib/comments/docComments'
+import type { AnchorRange, CommentAnchor } from '../../../src/lib/comments/docComments'
 import { Y_COMMENTS_NAME } from '../../../src/lib/docRoomProtocol'
 import { forceRecalc } from '../../../src/editor/composition'
 import { REMOTE_HOLD_CHECK_MS } from '../../../src/editor/remoteGate'
@@ -21,8 +21,8 @@ import {
   observeCommentKeys,
 } from '../../../src/editor/commentMarks'
 
-vi.mock('../../../src/lib/commentAnchor', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../src/lib/commentAnchor')>()
+vi.mock('../../../src/lib/comments/commentAnchor', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/lib/comments/commentAnchor')>()
   return { ...actual, resolveCommentAnchor: vi.fn(actual.resolveCommentAnchor) }
 })
 

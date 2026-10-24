@@ -2,7 +2,7 @@
 import { inspectImageBytes } from '../lib/imageFile'
 import { shrinkImage } from '../lib/shrinkImage'
 import type { ImageExt } from '../lib/imageBlock'
-import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../lib/e2eeLimits'
+import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../lib/vault/e2eeLimits'
 import { isE2eeStoreError } from '../e2ee/e2eeStore'
 import type { Notice } from './notice'
 

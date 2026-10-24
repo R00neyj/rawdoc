@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createMemoryStore } from '../../../src/storage/memoryStore'
 import type { Store } from '../../../src/types'
-import type { CommentRecord } from '../../../src/lib/docComments'
+import type { CommentRecord } from '../../../src/lib/comments/docComments'
 import { runLocalTrashContract } from './localTrashContract'
 
 function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {

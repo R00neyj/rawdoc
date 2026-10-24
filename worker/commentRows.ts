@@ -1,7 +1,7 @@
 // 댓글 D1 복사본·알림 문장, 행 ↔ CommentRecord, 알림 받는 사람·발췌 (specs/features/F-502.md 4장·5장·6장·8장)
-import { NOTIFICATIONS_PER_RECIPIENT_MAX, commentSig, recordAnchorSig } from '../src/lib/docComments'
-import type { AnchorRange, CommentEntry, CommentRecord, CommentThread, NotificationKind } from '../src/lib/docComments'
-import { toCommentRecord } from '../src/lib/commentAnchor'
+import { NOTIFICATIONS_PER_RECIPIENT_MAX, commentSig, recordAnchorSig } from '../src/lib/comments/docComments'
+import type { AnchorRange, CommentEntry, CommentRecord, CommentThread, NotificationKind } from '../src/lib/comments/docComments'
+import { toCommentRecord } from '../src/lib/comments/commentAnchor'
 import { commentBytesInStatement, commentBytesOutStatement, e2eeCommentBytesOutStatement, type DocIdSubquery } from './usage'
 import { utf8ByteLength } from './validate'
 

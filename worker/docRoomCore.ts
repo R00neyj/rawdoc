@@ -20,9 +20,9 @@ import {
   commentSig,
   groupCommentThreads,
   validateCommentEntry,
-} from '../src/lib/docComments'
-import type { CommentActor, CommentEntry, CommentRecord, CommentThread } from '../src/lib/docComments'
-import { resolveCommentAnchor, resolveCommentAnchors, restoreCommentEntries } from '../src/lib/commentAnchor'
+} from '../src/lib/comments/docComments'
+import type { CommentActor, CommentEntry, CommentRecord, CommentThread } from '../src/lib/comments/docComments'
+import { resolveCommentAnchor, resolveCommentAnchors, restoreCommentEntries } from '../src/lib/comments/commentAnchor'
 import { planCommentFixes } from './commentGuard'
 import type { CommentChange } from './commentGuard'
 import {

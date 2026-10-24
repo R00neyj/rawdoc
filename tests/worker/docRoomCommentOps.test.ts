@@ -7,9 +7,9 @@ import { COMMENT_FIX_ORIGIN, DocRoomCore, isReadOnlyState } from '../../worker/d
 import type { DocRoomHost, RoomConnection, StatefulConnection } from '../../worker/docRoomCore'
 import type { DoStorageLike } from '../../worker/yStore'
 import { asD1, openTestDb } from '../../worker/testD1'
-import { createCommentAnchor } from '../../src/lib/commentAnchor'
-import { COMMENT_BODY_MAX, commentQuote } from '../../src/lib/docComments'
-import type { CommentEntry, CommentRecord } from '../../src/lib/docComments'
+import { createCommentAnchor } from '../../src/lib/comments/commentAnchor'
+import { COMMENT_BODY_MAX, commentQuote } from '../../src/lib/comments/docComments'
+import type { CommentEntry, CommentRecord } from '../../src/lib/comments/docComments'
 import { COMMENT_OP_MAX_CHARS, parseCommentOpReply } from '../../src/lib/docRoomProtocol'
 import type { CommentOp, CommentOpReply } from '../../src/lib/docRoomProtocol'
 

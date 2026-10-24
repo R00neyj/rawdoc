@@ -9,9 +9,9 @@ import { AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
-import { QUOTA_HOLD_MS, RATE_LIMITED_MINUTE_MESSAGE, rateLimitedDayMessage, docQuotaMessage, nextUtcMidnight } from '../lib/usageLimits'
+import { QUOTA_HOLD_MS, RATE_LIMITED_MINUTE_MESSAGE, rateLimitedDayMessage, docQuotaMessage, nextUtcMidnight } from '../lib/account/usageLimits'
 import type { Attachment, AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding, Store, SyncState } from '../types'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'

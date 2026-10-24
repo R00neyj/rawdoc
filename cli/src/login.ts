@@ -2,7 +2,7 @@
 // 콜백 state 는 자기 공개키 문자열, 풀기는 openSealedTokenV2 (F-2023 9장)
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import brand from '../../brand.config'
-import { openSealedTokenV2 } from '../../src/lib/cliSeal'
+import { openSealedTokenV2 } from '../../src/lib/account/cliSeal'
 import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from '../../worker/pageTokens'
 import { apiMe, type ClientConfig } from './client'
 import { CliError } from './output'

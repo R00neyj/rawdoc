@@ -1,19 +1,19 @@
 // 뒤로·앞으로 가기·주소창 직접 수정(hashchange)과 해시 주소 쓰기 — App.tsx 에서 옮김 (F-2071, F-2059)
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { Folder } from '../types'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
 import type { Store } from '../types'
 import { announceMissingDoc } from './trashApi'
-import type { UseDocCommentsResult } from './useDocComments'
+import type { UseDocCommentsResult } from './comments/useDocComments'
 import { formatHash, formatMapHash } from './hashRoute'
 import { decideHashNav, docKnownAfterRefresh } from './hashNav'
 import { leaveScreens } from './leaveScreens'
 import { setPref } from './prefs'
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import { ancestorsOfDoc } from '../lib/folderTree'
-import { firstListedDocId } from './vaultVisibility'
+import { firstListedDocId } from './vault/vaultVisibility'
 import type { UseLocalFileResult } from './useLocalFile'
 
 export function replaceHashUrl(docId: string | null) {

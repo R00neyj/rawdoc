@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { asD1, openTestDb } from '../../worker/testD1'
 import { OVERFLOW_SQL, cleanupComments } from '../../worker/commentGc'
-import { NOTIFICATIONS_PER_RECIPIENT_MAX } from '../../src/lib/docComments'
+import { NOTIFICATIONS_PER_RECIPIENT_MAX } from '../../src/lib/comments/docComments'
 
 // index → docRoom → partyserver → cloudflare:workers 는 node 에서 풀리지 않는다 (F-304)
 vi.mock('../../worker/docRoom', () => ({ DocRoom: class {} }))

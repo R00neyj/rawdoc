@@ -1,5 +1,5 @@
 // F-2042 4.1·4.3 — 부팅 캐시 먼저 셸의 순수 함수, F-2134 3.1·4.1 — 계정 확인 전 셸
-import type { AccountState } from './account'
+import type { AccountState } from './account/account'
 import type { HashRoute } from './hashRoute'
 
 // 앞질러 연 셸의 문서 세션 미룸을 푸는 상한 — 서버 요청 멈춤은 이 값과 상관없이 답을 기다린다 (F-2134 3.2·D5)

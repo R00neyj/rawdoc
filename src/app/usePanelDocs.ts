@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../lib/docLinks'
 import { findOpenTodos, groupTasks, scanTodoSources, type TaskBucket, type TaskFilter, type TaskRow } from '../lib/docTodos'
-import { buildLocalGraph, type LocalGraph } from '../lib/localGraph'
+import { buildLocalGraph, type LocalGraph } from '../lib/map/localGraph'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { EditorHandle } from '../editor/Editor'
 import type { DocMeta } from './docMeta'

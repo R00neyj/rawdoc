@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isEntryScript, main, type MainDeps } from '../../../cli/src/main'
 import { syntaxJson } from '../../../cli/src/syntax'
-import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/cliLoginUrl'
+import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/account/cliLoginUrl'
 import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 
 function jsonResponse(body: unknown, status = 200): Response {

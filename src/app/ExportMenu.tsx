@@ -1,5 +1,5 @@
 import { IconDownload, IconNotes, IconPrint, IconRaw, IconCopy } from './icons'
-import type { MenuAction } from './ShareMenu'
+import type { MenuAction } from './share/ShareMenu'
 
 // 상단바 ⋯ 의 `내보내기` 하위 항목 (specs/features/F-278.md 3장, F-279.md 3장, F-280.md 3.3, small 2026-10-21)
 export type ExportMenuProps = {

@@ -3,7 +3,7 @@
 import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import { extractAttachmentRefs } from '../lib/imageBlock'
-import { parseCommentRecords, type CommentRecord } from '../lib/docComments'
+import { parseCommentRecords, type CommentRecord } from '../lib/comments/docComments'
 import { restoreFolderId, trashPathOf } from '../lib/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 

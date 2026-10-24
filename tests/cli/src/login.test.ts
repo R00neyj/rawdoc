@@ -1,6 +1,6 @@
 // F-2021 U9 (specs/features/F-2021.md 13.1, 5.2) + F-2023 U6 (specs/features/F-2023.md 13.1, 9장) — 콜백 서버가 v2 로 푼다
 import { describe, expect, it } from 'vitest'
-import { generateSealKeyPair, generateSealKeyPairV2, sealToken, sealTokenV2 } from '../../../src/lib/cliSeal'
+import { generateSealKeyPair, generateSealKeyPairV2, sealToken, sealTokenV2 } from '../../../src/lib/account/cliSeal'
 import {
   CALLBACK_DENIED_BODY,
   CALLBACK_MISMATCH_BODY,

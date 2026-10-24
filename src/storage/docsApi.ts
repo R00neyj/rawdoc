@@ -1,7 +1,7 @@
 // F-206 서버 API 호출 래퍼 — fetch 하나로 감싸고 오류를 종류별로 분류한다 (specs/features/F-207.md 2.3)
 import type { Doc, Folder, LineEnding } from '../types'
-import { parseRetryAfter } from '../lib/usageLimits'
-import type { CommentCountResponse, CommentImportBody, CommentImportResponse } from '../lib/docComments'
+import { parseRetryAfter } from '../lib/account/usageLimits'
+import type { CommentCountResponse, CommentImportBody, CommentImportResponse } from '../lib/comments/docComments'
 
 export type ServerDoc = Doc & { version: number }
 export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }

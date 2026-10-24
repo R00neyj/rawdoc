@@ -1,5 +1,5 @@
 // 저장소 데이터 모양 (specs/architecture.md 2장)
-import type { CommentRecord } from './lib/docComments'
+import type { CommentRecord } from './lib/comments/docComments'
 
 export type LineEnding = 'crlf' | 'lf'
 

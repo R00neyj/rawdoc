@@ -3,10 +3,10 @@
 import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
 import { ApiError } from '../storage/docsApi'
 import { AttachmentApiError } from '../storage/attachmentsApi'
-import { E2EE_MAX_ATTACHMENT_REFS, envelopeBase64Length, isPlainAttachmentTooLarge, isPlainContentTooLarge, utf8ByteLength } from '../lib/e2eeLimits'
+import { E2EE_MAX_ATTACHMENT_REFS, envelopeBase64Length, isPlainAttachmentTooLarge, isPlainContentTooLarge, utf8ByteLength } from '../lib/vault/e2eeLimits'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { inspectImageBytes } from '../lib/imageFile'
-import { formatCount, nextUtcMidnight } from '../lib/usageLimits'
+import { formatCount, nextUtcMidnight } from '../lib/account/usageLimits'
 import { isE2eeStoreError, attachmentRefsOf } from './e2eeStore'
 import { decryptDocField, encryptAttachment, encryptDocField, openDocKey, rewrapAttachment, rewrapDocKey } from './crypto'
 

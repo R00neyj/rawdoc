@@ -1,7 +1,7 @@
 import { lazy, Suspense, type RefObject } from 'react'
-import SharedView from './SharedView'
-import AccessRequestControl from './AccessRequestControl'
-import SharesPage from './SharesPage'
+import SharedView from './share/SharedView'
+import AccessRequestControl from './share/AccessRequestControl'
+import SharesPage from './share/SharesPage'
 import HelpPage from './HelpPage'
 import TrashPage from './TrashPage'
 import EmptyState from './EmptyState'
@@ -10,19 +10,19 @@ import type { EditorHandle } from '../editor/Editor'
 import type { UseLocalFileResult } from './useLocalFile'
 import type { UseRecentFilesResult } from './useRecentFiles'
 import type { DocMeta } from './docMeta'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 import type { Store } from '../types'
-import type { UseE2ee } from './useE2ee'
-import type { UseAccountStatusResult } from './useAccountStatus'
+import type { UseE2ee } from './vault/useE2ee'
+import type { UseAccountStatusResult } from './account/useAccountStatus'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { UseImportFlowResult } from './useImportFlow'
-import type { UseSharesPageResult } from './useSharesPage'
+import type { UseSharesPageResult } from './share/useSharesPage'
 import type { UseTrashPageResult } from './useTrashPage'
 import type { UseContextMenuResult } from './useContextMenu'
 import type { NoticeWithAction } from './NoticeBar'
-import { vaultNoticeOn } from './vaultVisibility'
+import { vaultNoticeOn } from './vault/vaultVisibility'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
-const MapPage = lazy(() => import('./MapPage'))
+const MapPage = lazy(() => import('./map/MapPage'))
 
 export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
   Pick<UseAppearancePrefsResult, 'contentWidthPref'> &

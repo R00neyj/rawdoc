@@ -1,6 +1,6 @@
 // /login — 스크립트 없는 완결 HTML, 복귀 주소 규칙, 오류 코드 → 문구 (specs/features/F-2033.md 6장, F-2032.md 3.2~3.4)
 import brand from '../brand.config'
-import { isLoginReturnHash } from '../src/lib/loginReturn'
+import { isLoginReturnHash } from '../src/lib/account/loginReturn'
 import { renderSiteFooter, renderSiteHeader, SITE_CHROME_CSS } from '../src/lib/siteChrome'
 import { PAGE_TOKENS_CSS } from './pageTokens'
 import { GITHUB_LOGO_SVG, GOOGLE_LOGO_SVG } from './providerLogos'

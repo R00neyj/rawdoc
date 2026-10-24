@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { importTokenKey, sealToken } from '../../worker/githubCrypto'
 import { cleanupServerAttachments } from '../../worker/attachmentGc'
-import { githubMonth } from '../../src/lib/githubContract'
+import { githubMonth } from '../../src/lib/github/githubContract'
 
 type Worker = { fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> }
 let worker: Worker

@@ -5,9 +5,9 @@ import { BlockType, Decoration, EditorView, GutterMarker, ViewPlugin, gutter } f
 import type { BlockInfo, DecorationSet, ViewUpdate } from '@codemirror/view'
 import type * as Y from 'yjs'
 
-import { createCommentAnchor, resolveCommentAnchor, resolveCommentAnchors } from '../lib/commentAnchor'
-import { commentQuote, groupCommentThreads, sortThreadsByPosition, toAnchorRange } from '../lib/docComments'
-import type { AnchorRange, CommentAnchor, CommentThread } from '../lib/docComments'
+import { createCommentAnchor, resolveCommentAnchor, resolveCommentAnchors } from '../lib/comments/commentAnchor'
+import { commentQuote, groupCommentThreads, sortThreadsByPosition, toAnchorRange } from '../lib/comments/docComments'
+import type { AnchorRange, CommentAnchor, CommentThread } from '../lib/comments/docComments'
 import { Y_COMMENTS_NAME } from '../lib/docRoomProtocol'
 import { forceRecalc, isForced } from './composition'
 import { REMOTE_HOLD_CHECK_MS, compositionAlive } from './remoteGate'

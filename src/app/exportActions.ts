@@ -10,7 +10,7 @@ import type { NoticeWithAction } from './NoticeBar'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
-import { vaultNoticeOn } from './vaultVisibility'
+import { vaultNoticeOn } from './vault/vaultVisibility'
 import { printDoc } from './printDoc'
 import { appliedUserCss } from './userCssApply'
 

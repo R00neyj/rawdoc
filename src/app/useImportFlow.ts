@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { AttachmentExt, Doc, Folder, LineEnding, Store } from '../types'
 import { ancestorsOfDoc, folderAncestors } from '../lib/folderTree'
-import type { ShareDoc } from '../lib/shareCodec'
+import type { ShareDoc } from '../lib/share/shareCodec'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import type { DocPathKind } from './docPath'
 import { setPref } from './prefs'

@@ -4,7 +4,7 @@ import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, Pe
 import { createRemoteCache } from '../../../src/storage/remoteCache'
 import { descendantFolderIds } from '../../../src/lib/folderTree'
 import { withE2ee } from '../../../src/e2ee/e2eeStore'
-import type { CommentRecord } from '../../../src/lib/docComments'
+import type { CommentRecord } from '../../../src/lib/comments/docComments'
 
 // 캐시 getDoc 이 값을 돌려주기 직전에 한 번 끼어드는 갈고리 — 비어 있으면 원래 함수 그대로 (리뷰 S2 후속)
 const cacheHooks = vi.hoisted(() => ({ afterGetDoc: null as null | ((docId: string) => Promise<void>) }))

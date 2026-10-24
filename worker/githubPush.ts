@@ -14,8 +14,8 @@ import {
   isGithubFailure,
 } from './githubClient'
 import { dayUsageStatement } from './usage'
-import { E2EE_MAX_ATTACHMENT_REFS } from '../src/lib/e2eeLimits'
-import { encodePathSegments } from '../src/lib/githubPath'
+import { E2EE_MAX_ATTACHMENT_REFS } from '../src/lib/vault/e2eeLimits'
+import { encodePathSegments } from '../src/lib/github/githubPath'
 import {
   GITHUB_BLOB_MAX_BYTES,
   GITHUB_PUSH_MAX_IMAGES,
@@ -26,7 +26,7 @@ import {
   type GithubPushed,
   type GithubPushImage,
   type GithubPushPlan,
-} from '../src/lib/githubContract'
+} from '../src/lib/github/githubContract'
 
 type LinkRow = { repo_id: number; repo: string; branch: string; path: string; remote_sha: string | null }
 type Head = { head: string; tree: string }

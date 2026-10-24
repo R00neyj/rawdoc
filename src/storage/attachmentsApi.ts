@@ -1,6 +1,6 @@
 // F-209 첨부 서버 API 래퍼 — 서버 판정 결과를 그대로 돌려준다 (specs/features/F-209.md 2.3, 2.4)
 import type { AttachmentExt } from '../types'
-import { parseRetryAfter } from '../lib/usageLimits'
+import { parseRetryAfter } from '../lib/account/usageLimits'
 
 export type UploadedAttachment = { id: string; ext: AttachmentExt; mime: string; size: number; width: number; height: number }
 

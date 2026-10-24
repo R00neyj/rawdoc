@@ -12,7 +12,7 @@ import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { isValidToken } from './token'
 import { IMAGE_MIME, sniffImage } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
-import { encodePathSegments, isRepoDir, repoImagePaths } from '../src/lib/githubPath'
+import { encodePathSegments, isRepoDir, repoImagePaths } from '../src/lib/github/githubPath'
 import {
   GITHUB_IMAGES_PER_DOC,
   GITHUB_IMAGE_SOURCES_MAX_DIRS,
@@ -22,7 +22,7 @@ import {
   type GithubImageMap,
   type GithubImageSource,
   type GithubImageSources,
-} from '../src/lib/githubContract'
+} from '../src/lib/github/githubContract'
 
 type LinkRow = { repo_id: number; repo: string; branch: string; path: string }
 type DocRow = DocRowLike & { content: string }

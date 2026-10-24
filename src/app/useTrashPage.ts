@@ -1,6 +1,6 @@
 // 휴지통 페이지 S-10 목록·복원·영구 삭제·비우기 — 들어올 때마다 새로 부른다. 지금 보는 저장소의 휴지통만 (F-2145 2장, small 2026-10-16)
 import { useEffect, useMemo, useState } from 'react'
-import type { AccountState } from './account'
+import type { AccountState } from './account/account'
 import type { TrashItem } from '../lib/trash'
 import type { Store } from '../types'
 import type { NoticeWithAction } from './NoticeBar'

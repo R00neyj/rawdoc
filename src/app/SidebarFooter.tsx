@@ -1,5 +1,5 @@
 // 펼친 사이드바 하단 한 줄 — 계정 · 앱 설치 · `?` 메뉴 · 설정 (F-2090 3.3)
-import AccountMenu, { type AccountMenuProps } from './AccountMenu'
+import AccountMenu, { type AccountMenuProps } from './account/AccountMenu'
 import HelpMenu from './HelpMenu'
 import { IconDelete, IconInstall, IconSettings, IconTooltip } from './icons'
 

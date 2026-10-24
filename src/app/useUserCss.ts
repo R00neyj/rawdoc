@@ -1,6 +1,6 @@
 // 사용자 CSS 적용 시점·다른 탭 변경·조합 중 미룸·안전 모드 띠 (specs/features/F-2095.md 4·5장)
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { storedAccount, type AccountState } from './account'
+import { storedAccount, type AccountState } from './account/account'
 import type { NoticeWithAction } from './NoticeBar'
 import { getPref } from './prefs'
 import { USER_CSS_BOOT_KEY } from './bootPaint'

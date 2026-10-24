@@ -6,8 +6,8 @@ import {
   groupCommentThreads,
   isCommentId,
   validateCommentEntry,
-} from '../src/lib/docComments'
-import type { CommentActor, CommentAuthor, CommentEntry } from '../src/lib/docComments'
+} from '../src/lib/comments/docComments'
+import type { CommentActor, CommentAuthor, CommentEntry } from '../src/lib/comments/docComments'
 
 export type CommentChange = { key: string; action: 'add' | 'update' | 'delete'; oldValue: unknown }
 export type CommentFixActor = { userId: string; email: string; role: 'owner' | 'edit' | 'view' }

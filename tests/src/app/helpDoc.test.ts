@@ -6,9 +6,9 @@ import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from '../../../src/app/helpDoc'
 import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 import brand from '../../../brand.config'
 import { E2EE_DEFAULT_LOCK_MINUTES } from '../../../src/e2ee/keyring'
-import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../../../src/lib/e2eeLimits'
+import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../../../src/lib/vault/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../../src/app/wikiPreview'
-import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/docComments'
+import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/comments/docComments'
 import { RETAIN_MS } from '../../../src/storage/yjsStore'
 import { MAX_CONTENT_BYTES } from '../../../src/app/importWorkspace'
 import { PUSH_BATCH_MS, PUSH_QUOTA_RATIO } from '../../../src/lib/pushPayload'
@@ -359,12 +359,12 @@ describe('도움말 ## 명령줄 도구 절', () => {
     expect(section.body).toContain(`\`${cli} login\``)
     expect(section.body).toContain(`\`${cli} login --with-token < token.txt\``)
     expect(section.body).toContain(`\`${cli} put <id> 파일.md --base-version <n>\``)
-    const page = readSource('../../../src/app/CliLoginPage.tsx')
+    const page = readSource('../../../src/app/account/CliLoginPage.tsx')
     expect(page).toContain('터미널 로그인')
     expect(page).toContain("'승인'")
     expect(section.body).toContain('`터미널 로그인`')
     expect(section.body).toContain('`승인`')
-    expect(readSource('../../../src/app/AccountMenu.tsx')).toContain("label: 'API 토큰'")
+    expect(readSource('../../../src/app/account/AccountMenu.tsx')).toContain("label: 'API 토큰'")
     expect(section.body).toContain('`API 토큰`')
   })
 
@@ -392,9 +392,9 @@ describe('도움말 ## AI 앱 연결 절', () => {
     expect(readSource('../../../worker/oauthPages.ts')).toContain('value="yes">허용</button>')
     expect(section.body).toContain('`허용`')
     expect(readSource('../../../src/app/SettingsDialog.tsx')).toContain("account: '계정'")
-    expect(readSource('../../../src/app/ConnectedAppsTab.tsx')).toContain('>연결된 앱</h5>')
+    expect(readSource('../../../src/app/account/ConnectedAppsTab.tsx')).toContain('>연결된 앱</h5>')
     expect(section.body).toContain('`계정` 탭 `연결된 앱`')
-    expect(readSource('../../../src/app/ConnectedAppsTab.tsx')).toContain("'연결 끊기'")
+    expect(readSource('../../../src/app/account/ConnectedAppsTab.tsx')).toContain("'연결 끊기'")
     expect(section.body).toContain('`연결 끊기`')
   })
 })

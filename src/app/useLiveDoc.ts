@@ -6,7 +6,7 @@ import { Awareness } from 'y-protocols/awareness'
 import { isEditorRelay } from '../editor/remoteGate'
 import { openLiveSocket } from '../storage/liveSocket'
 import { YJS_LOAD_ORIGIN, type YjsAttachment, type YjsStore } from '../storage/yjsStore'
-import { createCommentCommandClient, type CommentCommandClient } from './commentOps'
+import { createCommentCommandClient, type CommentCommandClient } from './comments/commentOps'
 import { createLiveDocController, type LiveSnapshot } from './liveDoc'
 import { createMergeTracker } from './liveMerge'
 

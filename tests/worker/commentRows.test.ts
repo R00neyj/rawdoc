@@ -19,8 +19,8 @@ import {
   upsertCommentStatements,
 } from '../../worker/commentRows'
 import type { CommentRow, DocCommentDbRow, NotificationDraft } from '../../worker/commentRows'
-import { NOTIFICATIONS_PER_RECIPIENT_MAX, groupCommentThreads, parseCommentRecords } from '../../src/lib/docComments'
-import type { CommentEntry, CommentRecord } from '../../src/lib/docComments'
+import { NOTIFICATIONS_PER_RECIPIENT_MAX, groupCommentThreads, parseCommentRecords } from '../../src/lib/comments/docComments'
+import type { CommentEntry, CommentRecord } from '../../src/lib/comments/docComments'
 
 const DOC = 'doc-1'
 const OWNER_ID = 'u1'

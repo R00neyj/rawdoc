@@ -150,7 +150,7 @@ describe('migrateLocalIfNeeded', () => {
 
   // U21 (F-508.md 7.1) — readLocal 이 comments 를 돌려주면 importLocal 에 그대로 간다
   it('U21: readLocal 의 comments 가 importLocal 로 그대로 간다', async () => {
-    const commentsMap = new Map([['d1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../../../src/lib/docComments').CommentRecord[]>
+    const commentsMap = new Map([['d1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../../../src/lib/comments/docComments').CommentRecord[]>
     const { deps, importLocal } = makeDeps({
       readLocal: vi.fn(async () => ({ folders: [], docs: [makeDoc()], comments: commentsMap })),
     })
@@ -167,7 +167,7 @@ describe('migrateLocalIfNeeded', () => {
     await migrateLocalIfNeeded(depsNoComments)
     expect(importNoComments).not.toHaveBeenCalled()
 
-    const commentsMap = new Map([['g1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../../../src/lib/docComments').CommentRecord[]>
+    const commentsMap = new Map([['g1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../../../src/lib/comments/docComments').CommentRecord[]>
     const { deps: depsWithComments, importLocal: importWithComments } = makeDeps({
       readLocal: vi.fn(async () => ({ folders: [], docs: [untouched], comments: commentsMap })),
     })

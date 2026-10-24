@@ -3,7 +3,7 @@ import type { Attachment, AttachmentExt, Doc, Folder } from '../types'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import { encryptLocalPlainAttachment, planLocalE2eeMigration, rekeyLocalE2eeAttachment, rekeyLocalE2eeDoc, type LocalE2eeKeys } from '../e2ee/convert'
 import type { ServerStore } from '../storage/serverStore'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 
 // comments — 문서 id → 로컬 댓글 기록. 없으면 빈 것으로 본다 (F-508.md 3.1·7.1)
 export type LocalSnapshot = { folders: Folder[]; docs: Doc[]; comments?: Map<string, CommentRecord[]> }

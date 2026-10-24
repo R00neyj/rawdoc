@@ -1,5 +1,5 @@
 // 사이드바 문서 행 안 읽은 알림 표시 — 순수 함수. React·DOM 없음 (specs/features/F-510.md 3.1)
-import { NOTIFICATIONS_READ_IDS_MAX, type InboxNotificationItem } from '../lib/docComments'
+import { NOTIFICATIONS_READ_IDS_MAX, type InboxNotificationItem } from '../lib/comments/docComments'
 import type { TreeNode } from '../lib/folderTree'
 
 // 댓글 종류는 docId, 문서 공유는 대상 문서, 폴더 공유·권한 요청은 없음 (F-2116 2.5, F-2136)

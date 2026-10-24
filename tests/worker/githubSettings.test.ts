@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { checkGithubQuota, countGithubUse, loadGithubSettings } from '../../worker/githubSettings'
-import { githubMonth, githubQuotaResetAt } from '../../src/lib/githubContract'
+import { githubMonth, githubQuotaResetAt } from '../../src/lib/github/githubContract'
 
 const NOW = Date.UTC(2026, 9, 31, 23, 59)
 

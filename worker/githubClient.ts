@@ -3,7 +3,7 @@ import brand from '../brand.config'
 import { jsonResponse } from './http'
 import { openToken, sealToken } from './githubCrypto'
 import type { GithubConfig } from './githubSettings'
-import type { GithubErrorCode } from '../src/lib/githubContract'
+import type { GithubErrorCode } from '../src/lib/github/githubContract'
 
 export type GithubFailure = { code: GithubErrorCode; status: number; retryAfter?: number }
 

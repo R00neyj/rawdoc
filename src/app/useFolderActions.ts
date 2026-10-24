@@ -10,8 +10,8 @@ import { isE2eeStoreError } from '../e2ee/e2eeStore'
 import { E2EE_NOTICE } from './appNotices'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { setPref } from './prefs'
-import { firstListedDocId, folderLooksEmpty, type VaultFolderGate } from './vaultVisibility'
-import { splitVaultFolderDrop, vaultDropMoveItems } from './vaultFolderDrop'
+import { firstListedDocId, folderLooksEmpty, type VaultFolderGate } from './vault/vaultVisibility'
+import { splitVaultFolderDrop, vaultDropMoveItems } from './vault/vaultFolderDrop'
 
 export type UseFolderActionsOptions = {
   store: Store

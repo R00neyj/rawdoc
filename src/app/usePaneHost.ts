@@ -4,11 +4,11 @@ import type { EditorHandle } from '../editor/Editor'
 import { createPaneSources, sourceText, type PaneSources } from '../editor/paneSource'
 import { Y_TEXT_NAME } from '../editor/yBinding'
 import { Y_COMMENTS_NAME } from '../lib/docRoomProtocol'
-import type { CommentRecord } from '../lib/docComments'
+import type { CommentRecord } from '../lib/comments/docComments'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import type { LineEnding } from '../types'
 import type { ViewMode } from './ViewModeMenu'
-import { buildLocalCommentRecords } from './useDocComments'
+import { buildLocalCommentRecords } from './comments/useDocComments'
 
 export type PaneEntry = {
   docId: string | null

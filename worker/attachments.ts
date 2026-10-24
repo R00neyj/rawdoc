@@ -10,7 +10,7 @@ import { isDocAttachmentRef, isGithubImageInUse } from './githubImages'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess } from './access'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, quotaPushInBackground, usageOf, writesToday } from './usage'
-import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION, E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/e2eeLimits'
+import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION, E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/vault/e2eeLimits'
 
 export const MAX_ATTACHMENT_BYTES = E2EE_SERVER_MAX_ATTACHMENT_BYTES
 // 계정당 첨부 저장 한도 300MB (specs/features/F-221.md 2.1)

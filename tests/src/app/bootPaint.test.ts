@@ -15,7 +15,7 @@ import {
 } from '../../../src/app/bootPaint'
 import { hasSafeParam } from '../../../src/app/userCssApply'
 import { selectSlot, type UserCssSources } from '../../../src/app/userCssStore'
-import { storedAccount } from '../../../src/app/account'
+import { storedAccount } from '../../../src/app/account/account'
 import { toPublicRoute } from '../../../src/app/hashNav'
 import { USER_CSS_CHECKER_VERSION, type UserCssSnippet } from '../../../src/lib/userCssPolicy'
 import { resolveTheme } from '../../../src/app/theme'

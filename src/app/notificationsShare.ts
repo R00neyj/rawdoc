@@ -1,5 +1,5 @@
 // 탭 사이 알림 결과 메시지 — 채널 이름·모양 검사·더 새 결과 판정 (specs/features/F-2057.md 4.2·4.3). 순수
-import type { InboxNotificationsResponse } from '../lib/docComments'
+import type { InboxNotificationsResponse } from '../lib/comments/docComments'
 import { readNotificationsResponse } from './notificationsApi'
 
 export const NOTIFICATIONS_CHANNEL_NAME = 'md-notifications'

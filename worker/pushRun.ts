@@ -2,7 +2,7 @@
 import { PUSH_PRESENCE_FRESH_MS, PUSH_SENDS_PER_RUN_MAX, PUSH_STALE_MS } from '../src/lib/pushPayload'
 import { commentPushPayload } from '../src/lib/pushText'
 import type { PushCommentRow } from '../src/lib/pushText'
-import type { NotificationKind } from '../src/lib/docComments'
+import type { NotificationKind } from '../src/lib/comments/docComments'
 import { listLivePushSubscriptions, pushResultStatements } from './pushServer'
 import type { LivePushSubscription } from './pushServer'
 import { PUSH_SEND_CONCURRENCY, sendPushJobs } from './pushSend'
