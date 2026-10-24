@@ -73,6 +73,12 @@
   border-left-color: var(--ink);
 }
 
+/* 열 0 캐럿(margin-left -0.6px)이 거터(z-index 200, 불투명) 밑에 깔려 목록 줄 맨 앞에서 안 보였다 — 커서 층을 거터 위로 (tweak 2026-10-24) */
+/* CM 이 층 z-index 를 인라인 style 로 넣어 !important 로만 덮인다 */
+.cm-host .cm-editor .cm-scroller > .cm-cursorLayer {
+  z-index: 201 !important;
+}
+
 /* drawSelection 이 그리는 선택 바탕을 앱 ::selection 색에 맞춘다 — CM 기본 테마보다 한 단계 구체적이어야 이긴다 (small 2026-10-22) */
 .cm-host .cm-editor .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
   background: var(--selection-bg);
