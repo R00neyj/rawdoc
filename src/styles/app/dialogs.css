@@ -734,6 +734,11 @@
   margin: 0;
 }
 
+/* `.dialog .settings-card .dialog-note` 의 위 -6px 이 계정 삭제 버튼에 문구를 붙였다 (small 2026-10-25) */
+.dialog .settings-card .settings-account-note {
+  margin-top: 12px;
+}
+
 /* 가져오기·내보내기 카드 — 버튼 + 한 줄 설명, 행은 display: contents 로 풀어 버튼 칸을 같이 쓴다 (tweak 2026-09-26) */
 .data-grid {
   display: grid;
