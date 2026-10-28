@@ -68,6 +68,11 @@
   list-style: none;
 }
 
+/* 홀수 장이면 첫 줄이 한 장 — 마지막 줄이 늘 두 장으로 아래에 꽉 찬다 (tweak 2026-10-28) */
+.phone-tab-card:first-child:nth-last-child(odd) + .phone-tab-card {
+  grid-column-start: 1;
+}
+
 .phone-tab-card {
   position: relative;
   min-width: 0;
