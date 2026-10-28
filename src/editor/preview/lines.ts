@@ -315,10 +315,9 @@ export function buildLines(
             const lineObj = state.doc.lineAt(node.from)
             // 내어쓰기 대상 (F-152 2.3, 값은 listIndentPreview)
             out.push(lineClassRange(lineObj, 'md-list-line'))
-            const nextIsTask = node.node.nextSibling?.name === 'Task'
-            // 체크박스 줄은 기호 구역 대신 줄 전체 활성 판정을 그대로 쓴다 — F-166 A4 회귀(2026-09-18), 아래 TaskMarker 주석 참고
-            const inMarkZone = nextIsTask ? active.has(lineObj.number) : isCursorInMarkZone(state, hasFocus, lineObj.from, node.node)
-            if (inMarkZone) return
+            const task = node.node.nextSibling?.name === 'Task' ? node.node.nextSibling : null
+            // 체크박스는 `- [ ] ` 전체가 기호 구역 — 커서가 그 안이면 원문, 본문이면 위젯 (2026-10-28)
+            if (isCursorInMarkZone(state, hasFocus, lineObj.from, task?.getChild('TaskMarker') ?? node.node)) return
             const depth = listItemDepth(node.node)
             if (depth > 1) {
               const indentText = state.doc.sliceString(lineObj.from, node.from)
@@ -327,7 +326,7 @@ export function buildLines(
                 out.push(Decoration.replace({ widget: new ListIndentWidget(depth - 1) }).range(lineObj.from, node.from))
               }
             }
-            if (nextIsTask) {
+            if (task) {
               out.push(hideMarkAndSpace(state, node.node))
             } else if (list?.name === 'BulletList') {
               out.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to))
@@ -341,13 +340,12 @@ export function buildLines(
           }
 
           case 'TaskMarker': {
-            // 앞 ListMark 와 같은 줄 전체 활성 판정을 쓴다(위 ListMark 분기 참고)
-            const line = state.doc.lineAt(node.from).number
-            if (active.has(line)) return
+            const line = state.doc.lineAt(node.from)
+            if (isCursorInMarkZone(state, hasFocus, line.from, node.node)) return
             const mid = state.doc.sliceString(node.from + 1, node.to - 1)
             const checked = mid === 'x' || mid === 'X'
             out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
-            // 끝낸 항목은 글에 취소선(2026-09-21 사용자 요청) — 커서가 그 줄에 있으면 위 active 분기에서 이미 빠져나가 원문이 드러난 줄엔 취소선도 안 걸린다
+            // 끝낸 항목은 글에 취소선(2026-09-21 사용자 요청) — 기호 구역에 커서가 있으면 위에서 빠져나가 취소선도 안 걸린다
             if (checked) out.push(lineClassRange(state.doc.lineAt(node.from), 'md-task-done'))
             return
           }
