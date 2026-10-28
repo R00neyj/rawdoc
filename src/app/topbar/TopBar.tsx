@@ -12,6 +12,7 @@ import SidebarHead from '../sidebar/SidebarHead'
 import PeerAvatars from '../session/PeerAvatars'
 import ViewModeMenu, { VIEW_MODES, type ViewMode } from './ViewModeMenu'
 import TopBarMoreSheet from './TopBarMoreSheet'
+import HistoryNavButtons from './HistoryNavButtons'
 import { usePhoneWidth } from '../phone/usePhoneWidth'
 import type { OutlineControl } from '../rightPanel/Outline'
 import { moreButtonVisible, type TopBarScreen } from './topBarMore'
@@ -154,6 +155,7 @@ export default function TopBar({
             onOpenPalette={onOpenPalette}
           />
         )}
+        {!phone && <HistoryNavButtons />}
         <div className="topbar-spacer">
           {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} onPickImage={pickImage} />}
         </div>

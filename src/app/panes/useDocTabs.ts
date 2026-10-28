@@ -108,14 +108,14 @@ export type UseDocTabsResult = {
   palette: PaletteContext['panes']
 }
 
-function subscribeStandalone(onChange: () => void): () => void {
+export function subscribeStandalone(onChange: () => void): () => void {
   if (typeof matchMedia !== 'function') return () => {}
   const query = matchMedia(STANDALONE_QUERY)
   query.addEventListener('change', onChange)
   return () => query.removeEventListener('change', onChange)
 }
 
-function readStandalone(): boolean {
+export function readStandalone(): boolean {
   return typeof matchMedia === 'function' && matchMedia(STANDALONE_QUERY).matches
 }
 

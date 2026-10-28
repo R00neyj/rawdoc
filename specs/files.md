@@ -318,6 +318,7 @@
 |---|---|
 |`src/app/phone/edgeSwipe.ts`|휴대폰에서 화면 가장자리를 밀어 사이드바·목차 패널을 여닫는 동작을 판단함|
 |`src/app/phone/PhoneNav.tsx`|휴대폰 화면 하단의 뒤로·앞으로·문서 내 찾기·탭·명령 버튼 묶음|
+|`src/app/topbar/HistoryNavButtons.tsx`|설치한 앱(PWA) 창 상단바 맨 앞의 뒤로·앞으로 가기 버튼(브라우저 탭에는 안 보임)|
 |`src/app/phone/phoneNavRules.ts`|휴대폰 하단 이동 버튼을 언제 흐리게·숨길지 정함|
 |`src/app/phone/phoneTabs.ts`|문서 탭을 켤지(휴대폰 폭이면 브라우저에서도) 정하고, 휴대폰 탭 버튼 숫자(10 이상 9+)를 만듦|
 |`src/app/phone/PhoneTabsSheet.tsx`|휴대폰 하단 탭 버튼으로 여는 탭 고르기 판 — 2열 카드로 전환·닫기·새 탭|
