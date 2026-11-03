@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>F-4018 심사 전용 비밀번호 로그인 — 흐름</title>
+<style>
+  body { font-family: system-ui, sans-serif; color: #222; background: #f4f4f4; margin: 0; padding: 32px; line-height: 1.6; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 32px 0 12px; }
+  .lead { color: #555; margin: 0 0 24px; }
+  .flow { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .step { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 14px 16px; width: 250px; }
+  .step b { display: block; margin-bottom: 6px; }
+  .arrow { align-self: center; font-size: 22px; color: #888; }
+  .err { border-style: dashed; background: #fafafa; }
+  .mock { background: #fff; border: 1px solid #999; border-radius: 10px; width: 380px; padding: 24px; }
+  .mock h3 { margin: 0 0 8px; font-size: 20px; }
+  .btn { border: 1px solid #999; border-radius: 6px; padding: 9px; text-align: center; margin: 8px 0; background: #fff; }
+  .muted { color: #777; font-size: 13px; }
+  details { margin-top: 14px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 14px; }
+  .field { border: 1px solid #aaa; border-radius: 4px; padding: 7px; margin: 6px 0; color: #999; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  table { border-collapse: collapse; background: #fff; }
+  td, th { border: 1px solid #ccc; padding: 8px 10px; vertical-align: top; text-align: left; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>F-4018 심사 전용 비밀번호 로그인 — 사용자 흐름</h1>
+<p class="lead">OpenAI 심사 반려(로그인/OAuth 를 끝내지 못함) 대응. 심사자는 Google·GitHub 의 새 기기 확인 코드를 받을 수 없으므로, 정해 둔 심사용 이메일 1개만 비밀번호로 들어오게 한다. 새 가입은 없다</p>
+
+<h2>1. 입구 → 단계 → 분기</h2>
+<div class="flow">
+  <div class="step"><b>입구 A · ChatGPT 연결</b>심사자가 ChatGPT 에서 앱 연결 → rawdoc <code>/oauth2/authorize</code> → 로그아웃 상태라 <code>/login?oauth_query=…</code></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>로그인 화면</b>Google·GitHub 버튼 아래 접힌 <code>&lt;details&gt;</code> 「이메일로 로그인 (시험 계정)」. 스크립트 없음 그대로</div>
+  <div class="arrow">→</div>
+  <div class="step"><b>펼침 → 이메일·비밀번호 입력 → 로그인</b>POST 로 서버가 확인. 허용 목록 이메일 + 비밀번호 일치면 세션 생성</div>
+  <div class="arrow">→</div>
+  <div class="step"><b>복귀</b>oauth_query 가 있으면 동의 화면(F-4010) → 허용 → ChatGPT. 없으면 앱(<code>/?app=1</code> 또는 return 해시)</div>
+</div>
+<div class="flow" style="margin-top:16px">
+  <div class="step"><b>입구 B · 웹 /login 직접</b>같은 화면, 같은 폼. 복귀만 앱으로</div>
+  <div class="step err"><b>오류: 틀린 이메일·비밀번호</b>같은 화면 + 오류 줄 하나. 「이메일 또는 비밀번호가 맞지 않습니다.」 — 허용 목록에 없는 이메일인지 비밀번호가 틀렸는지 구분하지 않는다</div>
+  <div class="step err"><b>오류: 너무 많이 시도</b>같은 IP·같은 이메일 실패가 상한을 넘으면 잠시 막음 + 안내 줄</div>
+  <div class="step err"><b>기능 꺼짐</b>비밀(허용 이메일·비밀번호 해시)이 없으면 접힌 영역 자체를 그리지 않고, POST 도 404</div>
+</div>
+
+<h2>2. 로그인 화면 (그레이 스케일)</h2>
+<div class="row">
+  <div class="mock">
+    <h3>로그인</h3>
+    <div class="muted">Google 또는 GitHub 계정으로 로그인하면…</div>
+    <div class="btn">Google로 계속</div>
+    <div class="btn">GitHub로 계속</div>
+    <details open>
+      <summary>이메일로 로그인 (시험 계정 · Test account)</summary>
+      <div class="muted">심사·시험용으로 발급한 계정만 쓸 수 있습니다. 새 가입은 Google·GitHub 로 하세요.</div>
+      <div class="field">이메일 · Email</div>
+      <div class="field">비밀번호 · Password</div>
+      <div class="btn">로그인 · Sign in</div>
+    </details>
+    <p class="muted">이메일 주소가 인증된 계정만…</p>
+  </div>
+</div>
+
+<h2>3. 정할 것</h2>
+<table>
+  <tr><th>#</th><th>질문</th><th>추천</th></tr>
+  <tr><td>D1</td><td>폼을 어디에 두나</td><td>로그인 화면 맨 아래 접힌 <code>&lt;details&gt;</code>. 숨은 주소로 두면 OAuth 흐름에서 심사자가 찾아갈 길이 없음</td></tr>
+  <tr><td>D2</td><td>심사자가 한국어를 못 읽을 수 있음 — 이 영역 문구</td><td>한국어 · 영어 병기 (이 영역만)</td></tr>
+  <tr><td>D3</td><td>심사 뒤에도 켜 두나</td><td>켜 둠. 앱 업데이트 때마다 재심사가 있음. 끄려면 비밀만 지우면 됨</td></tr>
+  <tr><td>D4</td><td>샘플 문서는 어떻게 넣나</td><td>로그인한 뒤 CLI(<code>rawdoc</code>)로 한 번 넣음. 코드로 시드하지 않음</td></tr>
+</table>
+</body>
+</html>
