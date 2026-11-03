@@ -215,6 +215,7 @@ const OWNER_TABLES: [string, string][] = [
   ['notifications', "SELECT COUNT(*) AS n FROM notifications WHERE doc_id LIKE 'd%' OR recipient_email = 'owner@example.com'"],
   ['push_subscriptions', 'SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?1'],
   ['user_css', 'SELECT COUNT(*) AS n FROM user_css WHERE user_id = ?1'],
+  ['user_prefs', 'SELECT COUNT(*) AS n FROM user_prefs WHERE user_id = ?1'],
   ['github_accounts', 'SELECT COUNT(*) AS n FROM github_accounts WHERE user_id = ?1'],
   ['github_links', 'SELECT COUNT(*) AS n FROM github_links WHERE owner_id = ?1'],
   ['github_images', 'SELECT COUNT(*) AS n FROM github_images WHERE owner_id = ?1'],
@@ -227,6 +228,7 @@ function seedDeleteExtras(sqlDb: DatabaseSync) {
   run(sqlDb, "INSERT INTO auth_accounts (id, user_id, account_id, provider_id, created_at, updated_at) VALUES ('ac1', ?, 'g-1', 'google', ?, ?)", OWNER, iso, iso)
   run(sqlDb, "INSERT INTO e2ee_keys (user_id, bundle, rev, created_at, updated_at) VALUES (?, '{}', 1, 1, 1)", OWNER)
   run(sqlDb, "INSERT INTO user_css (user_id, snippets, rev, created_at, updated_at) VALUES (?, '[]', 1, 1, 1), (?, '[]', 1, 1, 1)", OWNER, OTHER)
+  run(sqlDb, "INSERT INTO user_prefs (user_id, prefs, updated_at) VALUES (?, '{}', 1), (?, '{}', 1)", OWNER, OTHER)
   run(sqlDb, "INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES ('p1', ?, 'https://fcm.googleapis.com/fcm/send/o', 'p', 'a', 1), ('p2', ?, 'https://fcm.googleapis.com/fcm/send/x', 'p', 'a', 1)", OWNER, OTHER)
   run(
     sqlDb,
@@ -476,7 +478,7 @@ function countingD1(inner: D1Database) {
 }
 
 describe('F-2038 W8 문장 수', () => {
-  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 30 (F-3014 GitHub 네 표 + F-4006 권한 요청 셋 + F-4007 요청 토큰 + F-4012 첨부 연결), 뒤따르는 정리는 ≤ 4', async () => {
+  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 31 (F-3014 GitHub 네 표 + F-4006 권한 요청 셋 + F-4007 요청 토큰 + F-4012 첨부 연결 + 계정 설정 small 2026-11-04), 뒤따르는 정리는 ≤ 4', async () => {
     const sqlDb = openTestDb()
     seedWorld(sqlDb)
     const { db, executed } = countingD1(asD1(sqlDb))
@@ -489,7 +491,7 @@ describe('F-2038 W8 문장 수', () => {
     const purgeSql = new Set<string>(Object.values(PURGE_SQL))
     const purge = executed.filter((sql) => purgeSql.has(sql))
     const sync = executed.filter((sql) => !purgeSql.has(sql))
-    expect(sync.length).toBeLessThanOrEqual(30)
+    expect(sync.length).toBeLessThanOrEqual(31)
     expect(purge.length).toBeGreaterThan(0)
     expect(purge.length).toBeLessThanOrEqual(4)
   })

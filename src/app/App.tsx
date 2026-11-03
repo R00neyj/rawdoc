@@ -102,6 +102,7 @@ import { useAccountDelete } from './account/useAccountDelete'
 import { usePushDevice } from './notifications/usePushDevice'
 import { useGithubFlow } from './github/useGithubFlow'
 import useUserCss from './userCss/useUserCss'
+import { useAccountPrefsSync } from './account/accountPrefsSync'
 import { useTitleCommit } from './document/useTitleCommit'
 import { useWikiRenameLinks } from './wiki/useWikiRenameLinks'
 import { useCommentFab, fabAnchorOf } from './comments/useCommentFab'
@@ -376,6 +377,7 @@ export default function App() {
 
   // ----- 사용자 CSS 적용·이어받기·안전 모드 (F-2095) -----
   useUserCss({ isPublic: publicRoute !== null, account, showNotice, beforeReload: beforeLeaveDoc })
+  useAccountPrefsSync(publicRoute === null && account.state === 'in' ? account.id : null) // 줄바꿈 설정 계정 동기화 (small 2026-11-04)
   // ----- 후원 알림 띠 (small 2026-10-11) -----
   useDonatePrompt({ ready: bootPhase === 'ready', isPublic: publicRoute !== null, noticeVisible: notice !== null, showNotice, dismissNotice })
 

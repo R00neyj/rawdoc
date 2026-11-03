@@ -295,7 +295,8 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |
 | `md.docTabs` | `{ 범위: { tabs: [{ key, pinned, title, shared? }], active, split? } }` JSON — 설치 앱 넓은 화면·휴대폰 폭(브라우저 포함, small 2026-10-22) 문서 탭. 범위는 `{저장소 종류}:{서버 사용자 id 또는 local}`, `key` 는 문서 id(다른 종류 항목은 접두사 붙인 문자열 키 자리). `split` 은 화면 분할 `{ layout, ratios, focus, panes }`, 이때 `tabs`·`active` 는 `panes[focus]` 의 거울(`splitLayout.ts`, F-2162) | 없음(복원할 탭 없음) | small 2026-10-21 |
 | `md.localFileOpen` | `import` \| `edit` — OS 로 연 `.md` 를 가져올지, 그 파일만 고칠지(S-11). 모르는 값은 `import` | `import` | F-2156 |
-| `md.lineBreaks` | `on` \| `off` — 보기 모드·HTML/PDF 내보내기·인쇄에서 한 번 줄바꿈을 `<br>` 로 그릴지(`off` 는 마크다운 표준). 모르는 값은 `on`. 공유 링크·공개 보기는 늘 `on` | `on` | small 2026-10-22 |
+| `md.lineBreaks` | `on` \| `off` — 보기 모드·HTML/PDF 내보내기·인쇄에서 한 번 줄바꿈을 `<br>` 로 그릴지(`off` 는 마크다운 표준). 모르는 값은 `on`. 공유 링크·공개 보기는 늘 `on`. 로그인하면 계정 `user_prefs` 값을 따름 | `on` | small 2026-10-22, 2026-11-04 |
+| `md.accountPrefsDirty` | 계정에 아직 못 올린 설정 키 배열 JSON(`["lineBreaks"]`). 올리면 비운다 | `[]` | small 2026-11-04 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/site/pageTheme.ts`)도 읽는다 (small 2026-10-12)
@@ -316,7 +317,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)·`LOGIN_LIMITER` 10/60초 (F-4018)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표) 0029 attachment_docs(F-4012) 0030 oauth_register_ip(F-4014)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표) 0029 attachment_docs(F-4012) 0030 oauth_register_ip(F-4014) 0031 user_prefs(small 2026-11-04 — 계정당 설정 JSON 한 줄, `GET·PUT /api/user-prefs`, 보낸 키만 덮어씀)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미

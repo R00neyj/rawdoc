@@ -134,6 +134,7 @@ const WRITE_ROUTES: [string, string][] = [
   ['PUT', '/api/push/subscription'],
   ['POST', '/api/push/test'],
   ['PUT', '/api/user-css'],
+  ['PUT', '/api/user-prefs'],
   ['POST', '/api/github/file'],
   ['PUT', '/api/docs/:id/github'],
   ['DELETE', '/api/docs/:id/github'],
@@ -165,7 +166,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('54개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 + F-3016 푸시 셋 + F-3017 그림 둘 + F-4005 권한 요청 둘 + F-4006 승인·거절 + F-4007 요청 토큰 + F-3023 휴지통 셋 포함)', () => {
+  it('55개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 + F-3016 푸시 셋 + F-3017 그림 둘 + F-4005 권한 요청 둘 + F-4006 승인·거절 + F-4007 요청 토큰 + F-3023 휴지통 셋 + 계정 설정 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -197,7 +198,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('POST', '/api/oauth/consent')).toBe(false)
     // F-4011 — 연결 끊기는 막힌 계정도 할 수 있다 (F-3013 3.4 선례)
     expect(isWriteRoute('DELETE', '/api/connected-apps/:id')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(54)
+    expect(WRITE_ROUTES).toHaveLength(55)
   })
 })
 

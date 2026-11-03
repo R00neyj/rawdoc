@@ -7,8 +7,9 @@ const ATTACHMENT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif',
 
 // 로그인 상태로 /api/me·/api/docs·/api/folders 를 흉내낸다
 // userCss — { snippets, rev } 를 여러 컨텍스트에 같은 객체로 넘기면 한 서버처럼 쓴다 (F-2099 7.2)
+// userPrefs — { prefs } 도 같은 식으로 여러 컨텍스트가 나눠 쓴다 (small 2026-11-04)
 // listAutoRefreshMs — 사이드바 목록 주기 갱신 간격 덮어쓰기. 기본 0 = 끔 (F-2120 4.3)
-export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 }, listAutoRefreshMs = 0, github } = {}) {
+export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 }, userPrefs = { prefs: {} }, listAutoRefreshMs = 0, github } = {}) {
   await page.addInitScript((ms) => {
     window.__listAutoRefreshMs = ms
   }, listAutoRefreshMs)
@@ -634,6 +635,17 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rev: userCss.rev }) })
     }
     return route.fallback()
+  })
+
+  // GET·PUT /api/user-prefs — 계정 설정, 보낸 키만 덮어쓴다 (small 2026-11-04)
+  await page.route('**/api/user-prefs', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'PUT') {
+      if (recordWrite(route, req)) return
+      Object.assign(userPrefs.prefs, req.postDataJSON().prefs)
+    } else if (req.method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ prefs: userPrefs.prefs }) })
   })
 
   // GET /api/shares — 공유 관리 페이지 목록 (F-243 3.1)

@@ -40,7 +40,7 @@
 |`src/app/prefs.ts`|브라우저에 저장하는 사용자 설정값을 읽고 씀|
 |`src/app/usePresence.ts`|창·메뉴가 사라질 때 닫히는 애니메이션 시간을 확보함|
 
-## `src/app/account/` 계정 (12)
+## `src/app/account/` 계정 (13)
 
 로그인 상태·계정 메뉴·계정 삭제·API 토큰·연결된 앱
 
@@ -50,6 +50,7 @@
 |`src/app/account/accountDelete.ts`|계정 삭제 요청과 삭제 뒤 이 기기 정리 순서를 처리함|
 |`src/app/account/AccountDeleteDialog.tsx`|계정 삭제 창. 삭제될 내용 확인, 다시 로그인, 확인 문구 입력 후 삭제함|
 |`src/app/account/AccountMenu.tsx`|사이드바 아래 계정 메뉴. 이메일·사용량을 보여주고 로그아웃 등을 고름|
+|`src/app/account/accountPrefsSync.ts`|로그인하면 줄바꿈 표시 설정을 계정에서 받아 적용하고, 바꾸면 계정에 올림|
 |`src/app/account/accountTrigger.ts`|사이드바 아래 계정 자리에 로그인 버튼과 계정 메뉴 중 무엇을 띄울지 정함|
 |`src/app/account/ApiTokensDialog.tsx`|명령줄 도구용 접속 열쇠(API 토큰)를 만들고 지우는 창|
 |`src/app/account/CliLoginPage.tsx`|명령줄 도구 로그인 때 브라우저에 뜨는 승인 화면|
@@ -67,7 +68,7 @@
 |---|---|
 |`src/app/appearance/contentWidth.ts`|본문 최대 너비의 허용 범위와 저장값을 계산함|
 |`src/app/appearance/defaultView.ts`|문서를 열 때 처음 보일 보기 모드를 설정에 따라 정함|
-|`src/app/appearance/lineBreaksPref.ts`|"줄바꿈 한 번도 줄을 바꿔 보이기" 설정을 기기에 저장하고, 보기 모드·HTML 내보내기·인쇄가 그 값을 따르게 함|
+|`src/app/appearance/lineBreaksPref.ts`|"줄바꿈 한 번도 줄을 바꿔 보이기" 설정을 저장하고, 보기 모드·HTML 내보내기·인쇄가 그 값을 따르게 함|
 |`src/app/appearance/theme.ts`|설정과 기기 설정을 보고 밝은·세피아·어두운 테마를 정함|
 |`src/app/appearance/useAppearancePrefs.ts`|화면·편집기 모양 설정과 자동 잠금 설정을 바꾸고 적용함|
 
@@ -683,13 +684,14 @@
 |`src/lib/touchContextMenu.ts`|터치 길게 누르기와 마우스 우클릭 메뉴를 구분함|
 |`src/lib/truncate.ts`|너무 긴 이름을 정한 글자 수에서 잘라 … 를 붙임|
 
-## `src/lib/account/` 계정 (6)
+## `src/lib/account/` 계정 (7)
 
 계정 삭제·로그인 복귀·명령줄 로그인·사용량 한도
 
 |파일|하는 일|
 |---|---|
 |`src/lib/account/accountDeletion.ts`|계정 삭제 때 서버와 앱이 같이 쓰는 확인 단어·제한 시간 등을 정함|
+|`src/lib/account/accountPrefsPolicy.ts`|계정에 실어 다른 기기가 따르는 설정(줄바꿈 표시)의 허용 키·값을 서버와 앱이 같이 검사함|
 |`src/lib/account/cliLoginUrl.ts`|명령줄 도구 로그인 화면 주소를 만들고 읽어 냄|
 |`src/lib/account/cliSeal.ts`|명령줄 도구로 넘기는 로그인 열쇠를 암호로 봉해서 전달함|
 |`src/lib/account/loginReturn.ts`|로그인 뒤 돌아갈 주소로 받아 줄 수 있는 길이·모양인지 앱과 서버가 같이 판단함|
@@ -970,7 +972,7 @@ GitHub 연결 상태와 경로 계산
 |---|---|
 |`src/types/d3-force-3d.d.ts`|3D 지도 배치 계산 도구의 사용법을 적어 둔 선언|
 
-## `worker/` 서버 (89)
+## `worker/` 서버 (90)
 
 rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을 맡음
 
@@ -1056,6 +1058,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/trash.ts`|문서·폴더를 휴지통으로 보내고 복원·영구 삭제·30일 만료를 처리함|
 |`worker/usage.ts`|사용자별 저장량·문서 수·하루 쓰기 한도를 계산하고 기록함|
 |`worker/userCss.ts`|사용자가 만든 꾸미기 스타일을 본인 것만 저장·불러옴|
+|`worker/userPrefs.ts`|계정에 실린 설정(줄바꿈 표시)을 본인 것만 저장·불러옴|
 |`worker/v1.ts`|명령줄 도구·자동 업로드용 문서·폴더·첨부 요청을 처리함|
 |`worker/v1Contract.ts`|명령줄 도구용 응답 모양과 예시를 정해 둠|
 |`worker/v1Search.ts`|명령줄 도구에서 내 문서 제목·본문을 찾아 줌|

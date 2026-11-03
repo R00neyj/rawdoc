@@ -89,6 +89,7 @@ import { handleMcp } from './mcp'
 import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
 import { handleSetDocE2ee } from './e2eeDocs'
 import { handleGetUserCss, handlePutUserCss } from './userCss'
+import { handleGetUserPrefs, handlePutUserPrefs } from './userPrefs'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
@@ -324,6 +325,8 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/e2ee/keys', handler: handleDeleteE2eeKeys },
   { method: 'GET', path: '/api/user-css', handler: handleGetUserCss },
   { method: 'PUT', path: '/api/user-css', handler: handlePutUserCss },
+  { method: 'GET', path: '/api/user-prefs', handler: handleGetUserPrefs },
+  { method: 'PUT', path: '/api/user-prefs', handler: handlePutUserPrefs },
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
   { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
   { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },

@@ -69,8 +69,10 @@ type PrefMap = {
   'md.donatePromptAt': string
   // 설치 앱 문서 탭 { 범위: { tabs, active } } JSON, 범위는 저장소 종류:계정 (small 2026-10-21)
   'md.docTabs': string
-  // 보기·HTML 내보내기·인쇄에서 한 번 줄바꿈도 줄을 바꿔 보일지, 기기별 (small 2026-10-22)
+  // 보기·HTML 내보내기·인쇄에서 한 번 줄바꿈도 줄을 바꿔 보일지, 로그인하면 계정 값을 따름 (small 2026-11-04)
   'md.lineBreaks': 'on' | 'off'
+  // 계정에 아직 못 올린 설정 키 배열(JSON), 기기별 (small 2026-11-04)
+  'md.accountPrefsDirty': string
 }
 
 type PrefKey = keyof PrefMap
@@ -127,6 +129,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.donatePromptAt',
   'md.docTabs',
   'md.lineBreaks',
+  'md.accountPrefsDirty',
 ])
 
 function assertAllowed(key: string) {
