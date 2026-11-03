@@ -315,7 +315,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 ## 6. 서버 (M2, 2026-09-15)
 
 ```
-wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
+wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)·`LOGIN_LIMITER` 10/60초 (F-4018)
 migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표) 0029 attachment_docs(F-4012) 0030 oauth_register_ip(F-4014)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
@@ -367,7 +367,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - `/api/trash` 넷: `GET`(목록)·`DELETE`(비우기)·`POST /api/trash/:id/restore`·`DELETE /api/trash/:id`(영구 삭제). 영구 삭제 D1 쓰기는 문서 수와 무관하게 16문장 한 batch, DO 방·R2 는 `purge_jobs` 로 (F-3023)
 - OAuth 인가 서버(F-4009): `GET /api/auth/oauth2/authorize`, `POST /api/auth/oauth2/token`·`register`·`revoke`(서버 간 호출이라 `Origin` 관문을 건너뜀, `register` 는 IP 관문 `oauth_register_ip` 를 먼저 보고 통과하면 하루 관문 `oauth_register_gate`). `/.well-known/oauth-authorization-server`(`…/api/auth` 도). `/.well-known/` 아래 그 밖은 404
 - 앱 연결 화면(F-4010): `/oauth/consent`·`/oauth/error`(Worker 가 만드는 페이지), `POST /api/oauth/consent`. `/login` 은 `oauth_query` 가 있으면 로그인 뒤 인가 흐름으로 이어간다 — 만료·위조면 `/oauth/error?error=request_expired`
-- MCP(F-4011·F-3030): `POST /mcp` 는 `Authorization: Bearer` OAuth 접근 토큰만(쿠키·`rd_` 토큰 아님). `/.well-known/oauth-protected-resource`·`/.well-known/oauth-protected-resource/mcp` 보호 자원 메타데이터, `/.well-known/openai-apps-challenge`(선택 비밀 `OPENAI_APPS_CHALLENGE`, 없으면 404). `GET /api/connected-apps`·`DELETE /api/connected-apps/:id` 로 연결된 앱 목록·끊기
+- MCP(F-4011·F-3030): `POST /mcp` 는 `Authorization: Bearer` OAuth 접근 토큰만(쿠키·`rd_` 토큰 아님). `/.well-known/oauth-protected-resource`·`/.well-known/oauth-protected-resource/mcp` 보호 자원 메타데이터, `/.well-known/openai-apps-challenge`(선택 비밀 `OPENAI_APPS_CHALLENGE`, 없으면 404). 심사 전용 `POST /api/login/password`(선택 비밀 `REVIEW_LOGIN_EMAIL`·`REVIEW_LOGIN_PASSWORD_HASH`, 없으면 404, IP 당 `LOGIN_LIMITER`, F-4018). `GET /api/connected-apps`·`DELETE /api/connected-apps/:id` 로 연결된 앱 목록·끊기
 - OAuth 표(0028, F-4008 10장): `oauth_clients`·`oauth_resources`·`oauth_client_resources`·`oauth_refresh_tokens`·`oauth_access_tokens`(토큰은 SHA-256 base64url 해시만)·`oauth_consents`·`oauth_client_assertions`·`oauth_client_use`(마지막 사용 시각, F-4011)·`oauth_register_gate`(행 하나). 0030(F-4014): `oauth_register_ip`(등록 IP 키별 하루 행). `users` 삭제 CASCADE 로 함께 지워진다
 - `/assets/*` 는 1년 immutable, 단 이름이 고정인 `assets/welcome-demo.js` 만 `no-cache`(`public/_headers`, F-2049 4.1). 랜딩 번들은 precache 에 넣지 않는다(F-2049 4.2)
 - `GET /pub/docs/:token/set` 응답에 문서마다 위키링크 해석 결과 표 `links` 가 붙는다(문서 1개뿐이어도 `links: {}`, 추가 질의 없음) — F-2018 (2026-09-23)
@@ -386,7 +386,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - 10분 Cron `*/10 * * * *` — 먼저 휴지통 30일 만료(`expireTrash`: 가장 오래된 만료 행의 소유자 한 명, 99개까지, 실패한 소유자는 로그 뒤 건너뛰고 다음 소유자, F-3023 5장), 그다음 `purge_jobs` 비우기(DO 방 먼저, 그다음 R2 접두사). 비우기 호출 예산은 `cronPurgeCalls(만료 문장 수)` = `min(PURGE_CALLS_ON_CRON 29, 하위 요청 50 − 비우기 D1 4 − 만료 문장 수)`. 계정 삭제 요청도 204 뒤 `waitUntil` 로 예산 15 만큼 먼저 비운다. `scheduled` 는 `event.cron` 이 이 문자열일 때만 이 일을 돌리고, 그 밖에는 매일 정리만 (F-2038 5.4·5.5, F-3023)
 - `/v1` PUT → `DocRoom` RPC `writeText`(idle: DO 안 D1 조건부 쓰기, 실시간: `Y.Text` 차이 적용 + 즉시 스냅숏). 실패하면 D1 직접 (F-308)
 - 쓰기 요청의 D1 쓰기는 사용량 줄(`users` 한 행)과 한 batch. 문서 행을 바꾸면 소유자 누계도 (F-2025)
-- 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login`·`/api/account` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)
+- 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login`·`/api/login/password`·`/api/account` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)
 - 공개 조회는 `links.ts` `findPublicLink` 하나를 거친다. 링크 소유자가 막힌 계정이면 없는 링크와 같이 404 (F-2028 5장)
 - 문서 권한 판정 `resolveDocAccess` 는 보낸 사람 또는 소유자가 막힌 계정이면 `owner`·`edit` 를 `view` 로 낮춘다. 쓰기 핸들러 셋(`handleUpdateDoc`·`handleUpdateDocV1`·`handleLockDoc`)은 그때 403 `account_blocked` (F-2028 4.2·4.3)
 - 가입 관문: better-auth `validateUserInfo` 의 `create-user` 에서 `signup_gate` 한 줄 조건부 `UPDATE`. 마감이면 `/login?error=signup_closed` (F-2028 3장)
