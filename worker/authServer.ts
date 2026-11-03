@@ -1,4 +1,4 @@
-// better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2, F-2028.md 3장, F-4009.md)
+// better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2, F-2028.md 3장, F-4009.md, F-4018.md)
 import { betterAuth } from 'better-auth'
 import type { Auth, BetterAuthOptions, User, ValidateUserInfoResult } from 'better-auth'
 import type { DBFieldAttribute } from 'better-auth/db'
@@ -6,6 +6,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import type { OAuthOptions } from '@better-auth/oauth-provider'
 import { oauthProviderOptions } from './oauthServer'
 import { isLocalAuthMode, readVar } from './origin'
+import { REVIEW_PASSWORD_MARK, isReviewEmail, reviewPasswordHash, verifyReviewPassword } from './reviewLogin'
 import { utcDay } from './usage'
 
 export const AUTH_SECRET_MIN_LENGTH = 32
@@ -160,11 +161,22 @@ export function authOptions(
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
       github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET },
     },
+    // 심사 계정 하나만 — 표지 행만 Worker 비밀과 비교하고, 가입·재설정 경로는 AUTH_ROUTES 밖이다 (F-4018 2장)
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      password: {
+        hash: reviewPasswordHash,
+        verify: async ({ hash, password }) => hash === REVIEW_PASSWORD_MARK && (await verifyReviewPassword(env, password)),
+      },
+    },
     user: {
       modelName: 'users',
       fields: { emailVerified: 'email_verified', createdAt: 'created_at', updatedAt: 'updated_at' },
       additionalFields: USER_ADDITIONAL_FIELDS,
       validateUserInfo: async (data) => {
+        // 심사 계정에 Google·GitHub 가 붙지 않게 — 가입·로그인·연결 모두 이 훅을 지난다 (F-4018 2장)
+        if (isReviewEmail(env, String(data.user.email ?? ''))) return { error: 'reserved_email' }
         if (data.user.emailVerified !== true) return { error: 'email_not_verified' }
         if (data.source.action === 'create-user') return admit(env, data)
         return undefined

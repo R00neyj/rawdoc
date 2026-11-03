@@ -101,4 +101,9 @@ describe('F-4001 U7 _headers 가 먼저 붙은 응답', () => {
       expect(withSecurityHeaders(pre(), req(path), 'n').headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp('login', {}))
     }
   })
+
+  it('F-4018 서명 질의가 있는 /login 도 form-action 끝에 앱 돌아갈 출처', () => {
+    const signed = withSecurityHeaders(pre(), req('/login?redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb&ba_param=redirect_uri&sig=x'), 'n')
+    expect(signed.headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp('login', { formTarget: 'https://claude.ai' }))
+  })
 })

@@ -29,7 +29,12 @@ export const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   state_security_mismatch: STATE_LOST,
   // F-2024 5.1 L6 — /login 은 스크립트가 없어 현지 시각을 쓰지 않는다 (F-2028 3.4)
   signup_closed: '오늘은 새 가입이 마감됐습니다. 한국 시간 오전 9시(UTC 자정)에 다시 열립니다. 그동안은 로그인 없이 쓸 수 있습니다.',
+  invalid_credentials: '이메일 또는 비밀번호가 맞지 않습니다.',
+  too_many_attempts: '시도가 너무 많습니다. 1분 뒤 다시 시도해 주세요.',
 }
+
+// 이 두 코드면 비밀번호 영역을 펼쳐 둔다 (F-4018 3장)
+const PASSWORD_ERRORS = new Set(['invalid_credentials', 'too_many_attempts'])
 
 export const LOGIN_ERROR_FALLBACK = '로그인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.'
 
@@ -132,6 +137,40 @@ body {
 .login-note { margin: 20px 0 0; color: var(--ink-2); font-size: 13px; }
 .login-consent { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 .login-consent a { color: var(--ink-2); }
+.login-password { margin: 20px 0 0; border-top: 1px solid var(--rule); padding-top: 16px; font-size: 14px; }
+.login-password summary { cursor: pointer; color: var(--ink-2); }
+.login-password summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.login-password-note { margin: 12px 0; color: var(--ink-2); font-size: 13px; }
+.login-password-form { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.login-password-form label { display: block; color: var(--ink-2); font-size: 13px; }
+.login-password-form input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.login-password-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.login-password-form button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.login-password-form button:hover { background: color-mix(in srgb, var(--ink) 4%, var(--panel)); }
+.login-password-form button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 480px) {
   .login { margin: 24px 16px 48px; padding: 28px 20px; }
 }
@@ -170,8 +209,29 @@ ${renderSiteFooter({ brandName: brand.name })}
   })
 }
 
+// 심사자가 한국어를 못 읽을 수 있어 이 영역만 한국어·영어 병기 (F-4018 3장)
+function passwordSection(hidden: string, open: boolean): string {
+  return `
+    <details class="login-password"${open ? ' open' : ''}>
+      <summary>이메일로 로그인 (시험 계정 · <span lang="en">Test account</span>)</summary>
+      <p class="login-password-note">심사·시험용으로 발급한 계정만 쓸 수 있습니다. 새 가입은 Google·GitHub 로 하세요. · <span lang="en">Only for the issued review account. To sign up, use Google or GitHub.</span></p>
+      <form method="post" action="/api/login/password" class="login-password-form">
+        ${hidden}
+        <label>이메일 · <span lang="en">Email</span><input type="email" name="email" autocomplete="username" required></label>
+        <label>비밀번호 · <span lang="en">Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+        <button type="submit">로그인 · <span lang="en">Sign in</span></button>
+      </form>
+    </details>`
+}
+
 // reauth — 계정 삭제의 다시 로그인 (F-2038 4.4). oauthQuery — 앱 연결 이어가기, return 대신 싣는다 (F-4010 3장)
-export function renderLoginPage(args: { returnHash: string; error: string | null; reauth?: boolean; oauthQuery?: string }): Response {
+export function renderLoginPage(args: {
+  returnHash: string
+  error: string | null
+  reauth?: boolean
+  oauthQuery?: string
+  passwordLogin?: boolean
+}): Response {
   const message = loginErrorMessage(args.error)
   const errorLine = message ? `\n    <p class="login-error" role="alert">${message}</p>` : ''
   const guide = args.oauthQuery !== undefined ? OAUTH_LINE : args.reauth ? REAUTH_LINE : ''
@@ -190,7 +250,7 @@ export function renderLoginPage(args: { returnHash: string; error: string | null
       ${hidden}
       ${providerButton('google', 'Google로 계속', GOOGLE_LOGO_SVG)}
       ${providerButton('github', 'GitHub로 계속', GITHUB_LOGO_SVG)}
-    </form>
+    </form>${args.passwordLogin ? passwordSection(hidden, PASSWORD_ERRORS.has(args.error ?? '')) : ''}
     <p class="login-note">이메일 주소가 인증된 계정만 쓸 수 있습니다. 이메일이 같으면 Google 과 GitHub 중 어느 쪽으로 들어와도 같은 계정입니다.</p>
     <p class="login-consent">계속하면 <a href="/terms">이용약관</a>과 <a href="/privacy">개인정보 처리방침</a>에 동의하는 것으로 봅니다.</p>`,
   })

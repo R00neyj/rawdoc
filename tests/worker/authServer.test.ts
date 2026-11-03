@@ -494,6 +494,9 @@ describe('F-2033 U12 wrangler.jsonc 계약', () => {
     // F-4011 — /mcp 는 F-3030 분기, OpenAI 도메인 확인 비밀은 선택이라 required 밖
     expect(config.assets.run_worker_first).toContain('/mcp')
     expect(config.secrets.required).not.toContain('OPENAI_APPS_CHALLENGE')
+    // F-4018 — 심사 로그인 비밀 둘도 선택
+    expect(config.secrets.required).not.toContain('REVIEW_LOGIN_EMAIL')
+    expect(config.secrets.required).not.toContain('REVIEW_LOGIN_PASSWORD_HASH')
   })
 })
 
@@ -526,5 +529,36 @@ describe('F-2033 U13 만료 행 정리', () => {
       'DELETE FROM auth_verifications WHERE expires_at < ?',
     ])
     expect(statements.map((s) => s.args)).toEqual([[iso], [iso]])
+  })
+})
+
+describe('F-4018 A9 심사 이메일 경계·비밀번호 옵션', () => {
+  const HASH = 'fba7bdaa10c1511aae32095215ab56d5ed962b55db10a91ce107949aecb15efd' // sha256('review-pass')
+  const review = (over: Record<string, unknown> = {}) =>
+    makeEnv(null, { REVIEW_LOGIN_EMAIL: 'Reviewer@Example.net', REVIEW_LOGIN_PASSWORD_HASH: HASH, ...over })
+  const data = (email: string, emailVerified: boolean, action: string) =>
+    ({ user: { email, emailVerified }, source: { method: 'oauth', action, oauth: { providerId: 'google' } } }) as unknown as ValidateUserInfoData
+
+  it('켜져 있으면 가입·로그인·연결 모두 reserved_email 이 첫 줄, 꺼지면 지금 그대로', async () => {
+    const admit = vi.fn(async () => undefined)
+    const validate = authOptions(review(), null, admit).user!.validateUserInfo!
+    for (const action of ['create-user', 'sign-in', 'link-account']) {
+      expect(await validate(data(' REVIEWER@example.net', false, action), {} as never)).toEqual({ error: 'reserved_email' })
+    }
+    expect(admit).not.toHaveBeenCalled()
+    expect(await validate(data('other@example.net', true, 'sign-in'), {} as never)).toBeUndefined()
+    const off = authOptions(review({ REVIEW_LOGIN_PASSWORD_HASH: undefined }), null, admit).user!.validateUserInfo!
+    expect(await off(data('reviewer@example.net', true, 'sign-in'), {} as never)).toBeUndefined()
+  })
+
+  it('emailAndPassword — 가입 꺼짐, verify 는 표지 행에만 참', async () => {
+    const options = authOptions(review(), null).emailAndPassword!
+    expect(options.enabled).toBe(true)
+    expect(options.disableSignUp).toBe(true)
+    const verify = options.password!.verify!
+    expect(await verify({ hash: 'worker-secret', password: 'review-pass' })).toBe(true)
+    expect(await verify({ hash: 'worker-secret', password: 'nope' })).toBe(false)
+    expect(await verify({ hash: HASH, password: 'review-pass' })).toBe(false)
+    expect(await options.password!.hash!('review-pass')).toBe(HASH)
   })
 })

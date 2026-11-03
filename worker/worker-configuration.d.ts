@@ -5,6 +5,7 @@ interface __BaseEnv_Env {
 	BUCKET: R2Bucket;
 	DB: D1Database;
 	WRITE_LIMITER: RateLimit;
+	LOGIN_LIMITER: RateLimit;
 	ASSETS: Fetcher;
 	BETTER_AUTH_URL: "https://rawdoc.app";
 	DEV_AUTH_EMAIL: "";

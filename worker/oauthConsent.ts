@@ -13,6 +13,7 @@ import {
   signedOAuthQuery,
 } from './oauthPages'
 import { readVar } from './origin'
+import { reviewLoginConfig } from './reviewLogin'
 
 // 상태 쿠키 4,096B 한도 아래로 잡은 값 — 실측 q 870자(오류 주소 포함)·1,756자에서 한도에 닿는다 (근거, 3장)
 const OAUTH_QUERY_MAX = 1700
@@ -46,7 +47,7 @@ export async function handleOAuthLoginPage(url: URL, env: Env): Promise<Response
   const error = url.searchParams.get('error')
   if (query === null) return error && OAUTH_PRE_REDIRECT_ERRORS.has(error) ? redirect(`/oauth/error?error=${error}`, 302) : null
   if (!(await isLiveOAuthQuery(query, env))) return redirect(OAUTH_EXPIRED_PATH, 302)
-  return renderLoginPage({ returnHash: '', error, oauthQuery: query })
+  return renderLoginPage({ returnHash: '', error, oauthQuery: query, passwordLogin: reviewLoginConfig(env) !== null })
 }
 
 async function publicClientName(request: Request, env: Env, clientId: string): Promise<string | null | undefined> {

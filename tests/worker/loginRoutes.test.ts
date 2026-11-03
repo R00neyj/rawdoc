@@ -163,6 +163,14 @@ describe('F-2033 U32 /api/auth 허용 목록', () => {
       ['GET', '/api/auth/callback/googlex'],
       ['GET', '/api/auth/callback/google/'],
       ['GET', '/api/auth/callback/Google'],
+      // F-4018 A8 — emailAndPassword 를 켜면 생기는 경로도 밖에서는 404
+      ['POST', '/api/auth/sign-in/email'],
+      ['POST', '/api/auth/sign-up/email'],
+      ['POST', '/api/auth/request-password-reset'],
+      ['POST', '/api/auth/reset-password'],
+      ['POST', '/api/auth/change-password'],
+      ['POST', '/api/auth/verify-password'],
+      ['POST', '/api/auth/change-email'],
     ]
     for (const [method, path] of cases) {
       const res = await call(env, path, { method, headers: { Origin: ORIGIN } })

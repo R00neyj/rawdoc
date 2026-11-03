@@ -149,7 +149,7 @@ describe('F-2033 U28 오류 코드 → 문구', () => {
       const { html } = await page('', code)
       expect(html).toContain(`<p class="login-error" role="alert">${message}</p>`)
     }
-    expect(Object.keys(LOGIN_ERROR_MESSAGES).length).toBe(9)
+    expect(Object.keys(LOGIN_ERROR_MESSAGES).length).toBe(11) // F-4018 두 코드
   })
 
   it('F-2028 L1 가입 마감 문구, validation_failed 는 마지막 줄', async () => {

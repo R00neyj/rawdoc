@@ -970,7 +970,7 @@ GitHub 연결 상태와 경로 계산
 |---|---|
 |`src/types/d3-force-3d.d.ts`|3D 지도 배치 계산 도구의 사용법을 적어 둔 선언|
 
-## `worker/` 서버 (88)
+## `worker/` 서버 (89)
 
 rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을 맡음
 
@@ -1043,6 +1043,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/pushServer.ts`|푸시 받을 기기 목록을 관리하고 오래 실패한 기기를 정리함|
 |`worker/requestTokens.ts`|`링크 복사` 로 만든 링크에 넣을 권한 요청용 열쇠를 문서마다 발급함|
 |`worker/revalidateTargets.ts`|권한을 빼앗은 뒤 다시 확인해야 할 열린 문서를 찾음|
+|`worker/reviewLogin.ts`|심사·시험용으로 정해 둔 계정 하나만 이메일과 비밀번호로 로그인시킴|
 |`worker/rootRoute.ts`|첫 주소 접속 때 소개 화면과 앱 중 무엇을 보여 줄지 정함|
 |`worker/searchLines.ts`|검색어가 들어 있는 본문 줄을 골라 냄|
 |`worker/securityHeaders.ts`|응답마다 해킹 방지용 보안 설정을 붙임|

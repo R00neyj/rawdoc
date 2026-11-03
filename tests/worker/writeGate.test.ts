@@ -170,6 +170,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
     expect(isWriteRoute('POST', '/api/login')).toBe(false)
+    expect(isWriteRoute('POST', '/api/login/password')).toBe(false) // F-4018
     expect(isWriteRoute('GET', '/api/login')).toBe(false)
     expect(isWriteRoute('GET', '/api/me')).toBe(false)
     expect(isWriteRoute('POST', '/api/auth/sign-out')).toBe(false)
@@ -547,7 +548,10 @@ describe('G10 설정과 상수', () => {
   it('wrangler.jsonc ratelimits, MINUTE_WRITE_LIMIT·MINUTE_RETRY_AFTER', () => {
     const raw = readFileSync(`${REPO_ROOT}wrangler.jsonc`, 'utf-8')
     const parsed = JSON.parse(raw) as { ratelimits: unknown }
-    expect(parsed.ratelimits).toEqual([{ name: 'WRITE_LIMITER', namespace_id: '1001', simple: { limit: 120, period: 60 } }])
+    expect(parsed.ratelimits).toEqual([
+      { name: 'WRITE_LIMITER', namespace_id: '1001', simple: { limit: 120, period: 60 } },
+      { name: 'LOGIN_LIMITER', namespace_id: '1002', simple: { limit: 10, period: 60 } },
+    ])
     expect(MINUTE_WRITE_LIMIT).toBe(120)
     expect(MINUTE_RETRY_AFTER).toBe(60)
   })

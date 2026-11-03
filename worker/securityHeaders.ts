@@ -1,5 +1,5 @@
 import { CSP_MODE, cspHeaders, type CspKind } from '../src/lib/site/cspPolicy'
-import { consentFormTarget } from './oauthPages'
+import { consentFormTarget, signedOAuthQuery } from './oauthPages'
 import { rootTarget } from './rootRoute'
 
 export function cspKindOf(request: Request): CspKind {
@@ -31,7 +31,9 @@ export function withSecurityHeaders(response: Response, request: Request, nonce:
   headers.delete('Content-Security-Policy')
   headers.delete('Content-Security-Policy-Report-Only')
   // 동의 폼의 303 은 앱의 redirect_uri 로 간다 — 서명이 틀린 주소는 폼 없는 오류로 가 넓혀도 쓸 곳이 없다 (F-4010 4장)
-  const formTarget = url.pathname === '/oauth/consent' ? consentFormTarget(url.searchParams.get('redirect_uri')) : null
+  // 이미 동의한 앱이면 /login 비밀번호 폼의 303 도 곧장 그리 간다 (F-4018 근거)
+  const appForm = url.pathname === '/oauth/consent' || (url.pathname === '/login' && signedOAuthQuery(url.search) !== null)
+  const formTarget = appForm ? consentFormTarget(url.searchParams.get('redirect_uri')) : null
   for (const [name, value] of Object.entries(cspHeaders(kind, CSP_MODE, { nonce, origin: url.origin, formTarget }))) headers.set(name, value)
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }

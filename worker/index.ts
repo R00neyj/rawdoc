@@ -70,6 +70,7 @@ import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTok
 import { handleDeleteConnectedApp, handleListConnectedApps } from './connectedApps'
 import { handleProtectedResourceMetadata } from './mcpAuth'
 import { handleOpenaiChallenge } from './openaiChallenge'
+import { handleReviewLogin, reviewLoginConfig } from './reviewLogin'
 import {
   handleCreateAttachmentV1,
   handleCreateDocLinkV1,
@@ -269,7 +270,7 @@ async function handleLoginPage(request: Request, env: Env): Promise<Response> {
   // 계정 삭제의 다시 로그인 — 세션이 있어도 페이지를 그린다 (F-2038 4.4)
   const reauth = url.searchParams.get('reauth') === '1'
   if (user && !reauth) return redirect(target.successUrl, 302)
-  return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error'), reauth })
+  return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error'), reauth, passwordLogin: reviewLoginConfig(env) !== null })
 }
 
 // better-auth 가 여는 경로 중 콜백 둘·로그아웃·OAuth 인가 서버 넷만 넘긴다 (F-2033 7.4, F-4009 3장)
@@ -304,6 +305,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/account', handler: handleGetAccount },
   { method: 'DELETE', path: '/api/account', handler: handleDeleteAccount },
   { method: 'POST', path: '/api/login', handler: handleLoginStart },
+  { method: 'POST', path: '/api/login/password', handler: handleReviewLogin },
   { method: 'POST', path: '/api/oauth/consent', handler: handleConsentSubmit },
   { method: 'GET', path: '/api/docs', handler: handleListDocs },
   { method: 'POST', path: '/api/docs', handler: handleCreateDoc },
