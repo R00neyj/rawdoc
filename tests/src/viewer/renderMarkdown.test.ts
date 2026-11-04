@@ -902,3 +902,26 @@ describe('renderMarkdown — 한 번 줄바꿈 breaks 옵션', () => {
     expect(renderMarkdown('a\n\nb', { breaks: true })).toBe('<p>a</p>\n<p>b</p>\n')
   })
 })
+
+describe('renderMarkdown — 순서 목록 번호 자릿수', () => {
+  const items = (n: number, start = 1) => Array.from({ length: n }, (_, i) => `${start + i}. 항목`).join('\n') + '\n'
+
+  it('가장 큰 번호가 한 자리면 속성을 붙이지 않는다', () => {
+    expect(renderMarkdown(items(9))).toMatch(/^<ol>\n/)
+  })
+
+  it('가장 큰 번호가 두 자리면 data-digits="2"', () => {
+    expect(renderMarkdown(items(10))).toMatch(/^<ol data-digits="2">/)
+  })
+
+  it('시작 번호를 반영한다 — 98 부터 3개면 세 자리', () => {
+    expect(renderMarkdown(items(3, 98))).toMatch(/^<ol start="98" data-digits="3">/)
+  })
+
+  it('중첩 목록 항목은 바깥 목록 개수에 세지 않는다', () => {
+    const src = '1. a\n' + Array.from({ length: 10 }, (_, i) => `   ${i + 1}. b`).join('\n') + '\n'
+    const html = renderMarkdown(src)
+    expect(html).toMatch(/^<ol>\n/)
+    expect(html).toContain('<ol data-digits="2">')
+  })
+})

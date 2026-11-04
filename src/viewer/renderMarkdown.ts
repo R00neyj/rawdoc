@@ -80,6 +80,25 @@ function taskListsRule(state: StateCore): void {
 
 md.core.ruler.push('task_lists', taskListsRule)
 
+// 가장 큰 번호의 자릿수 — 두 자리부터 번호 칸을 넓힌다(markdown.css)
+function orderedListDigitsRule(state: StateCore): void {
+  const tokens = state.tokens
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i]
+    if (open.type !== 'ordered_list_open') continue
+    let count = 0
+    for (let j = i + 1; j < tokens.length; j++) {
+      const t = tokens[j]
+      if (t.type === 'ordered_list_close' && t.level === open.level) break
+      if (t.type === 'list_item_open' && t.level === open.level + 1) count++
+    }
+    const digits = String(Number(open.attrGet('start') ?? 1) + count - 1).length
+    if (digits > 1) open.attrSet('data-digits', String(digits))
+  }
+}
+
+md.core.ruler.push('ordered_list_digits', orderedListDigitsRule)
+
 // ----- 콜아웃 (F-128.md 3.2, 4.2) ----- 'inline' 전에 실행해 blockquote_open 다음 raw 텍스트(인라인 파싱 전 token.content)를 직접 검사한다
 // '>' 와 공백을 이미 뗀 content 라 F-128 2장 정규식을 그대로 쓸 수 있고, 중첩 인용도 다 거치므로 안쪽도 콜아웃으로 변환된다 — 편집 모드처럼 바깥만 예외 두지 않는다
 function calloutRule(state: StateCore): void {
