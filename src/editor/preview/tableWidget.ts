@@ -1,7 +1,7 @@
 // 표 위젯 — 칸 편집·행/열 추가(F-125). F-106 표 부분을 대체(코드블록은 F-106/blocks.ts 그대로). 칸 편집은 하위 CM6 EditorView 1개로 한다(F-125 2.2) — 한글 조합을 CM6 가 처리하게, 주 문서(state)가 원본(CLAUDE.md 불변조건)
 // 동시에 1칸만 편집 — 모듈 전역이 아니라 "주 EditorView 하나당 활성 칸 하나"를 WeakMap 으로 추적한다
 import { EditorSelection, EditorState } from '@codemirror/state'
-import { EditorView, WidgetType } from '@codemirror/view'
+import { EditorView, WidgetType, drawSelection } from '@codemirror/view'
 import type { StateCommand, Transaction } from '@codemirror/state'
 import { ySyncAnnotation } from 'y-codemirror.next'
 
@@ -383,6 +383,8 @@ function startEdit(
       doc: text,
       extensions: [
         singleLineFilter,
+        // 주 에디터의 drawSelection 이 하위 .cm-line 의 네이티브 캐럿·선택을 투명하게 덮어 칸도 직접 그린다
+        drawSelection(),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) pushCellEdit(mainView, row, col, update.state.doc.toString())
         }),
