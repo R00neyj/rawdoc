@@ -533,3 +533,18 @@ test.describe('F-171 표 행·열 추가 때 화면 튐', () => {
     expect(cellRect.right).toBeLessThanOrEqual(scrollRect.right + 1)
   })
 })
+
+test.describe('표 칸 커서 표시', () => {
+  // 본문 drawSelection 이 칸 .cm-line 의 네이티브 캐럿을 투명하게 덮어, 칸 편집기가 커서·선택을 직접 그려야 보인다
+  test('표 칸 편집 중 커서와 선택 영역이 칸 안에 그려진다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: NARROW_TABLE })
+    const table = page.locator('.md-table-widget table')
+    await table.locator('tr').nth(1).locator('td').nth(1).click()
+    const editing = page.locator('.md-table-cell-editing')
+    await expect(editing.locator('.cm-cursorLayer .cm-cursor')).toHaveCount(1)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Shift+ArrowLeft')
+    await expect(editing.locator('.cm-selectionLayer .cm-selectionBackground')).toHaveCount(1)
+  })
+})
