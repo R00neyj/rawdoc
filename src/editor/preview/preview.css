@@ -365,6 +365,12 @@
     height 100ms var(--ease-spring);
 }
 
+/* 칸 편집기(contenteditable)에서 넘어온 focus() 라 :focus-visible 이 붙어 전역 링이 표 스크롤 상자에 잘려 보였다 (tweak 2026-11-10) */
+.md-table-cell-highlight:focus-visible {
+  outline: none;
+  border-radius: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .md-table-cell-highlight {
     transition: none;
