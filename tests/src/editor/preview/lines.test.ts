@@ -74,6 +74,13 @@ describe('buildLines — 제목', () => {
     expect(replaced(decos)).toHaveLength(0)
   })
 
+  it('밑줄이 - 하나뿐이고 커서가 그 줄에 있으면 윗줄을 제목으로 그리지 않는다 (요청노트 2026-11-12)', () => {
+    expect(lineClasses(build(makeState('글\n-', 3)))).toEqual([])
+    expect(lineClasses(build(makeState('글\n- ', 4)))).toEqual([])
+    expect(lineClasses(build(makeState('글\n-\n\nx', 0)))).toEqual(['md-h2'])
+    expect(lineClasses(build(makeState('글\n--', 4)))).toEqual(['md-h2'])
+  })
+
   it('Setext 제목의 첫 줄이 그림 한 줄이면 그 줄엔 제목 클래스를 안 붙인다 (요청노트 2026-10-21)', () => {
     const img = '![설명|center|360](attachments/0f3a9c2e7b1d4a58.webp)'
     expect(lineClasses(build(makeState(`${img}\n-\n\nx`, 0)))).toEqual([])

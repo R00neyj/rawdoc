@@ -247,6 +247,8 @@ export function buildLines(
           case 'SetextHeading1':
           case 'SetextHeading2': {
             const mark = node.node.getChild('HeaderMark')
+            // 밑줄이 `-` 하나뿐이고 커서가 그 줄이면 불릿을 치는 중이라 윗줄을 제목으로 그리지 않는다 (요청노트 2026-11-12)
+            if (mark && active.has(state.doc.lineAt(mark.from).number) && state.doc.lineAt(mark.from).text.trim() === '-') return
             const lastContentLine = mark ? state.doc.lineAt(mark.from).number - 1 : state.doc.lineAt(node.to).number
             // 첫 줄이 그림 한 줄이면 blocks.ts 가 그림으로 그리니 제목이 아니다 (요청노트 2026-10-21)
             const image = leadingImageLine(state, node.node, imagePathsOf(state))
