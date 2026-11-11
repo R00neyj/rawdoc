@@ -297,6 +297,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 | `md.localFileOpen` | `import` \| `edit` — OS 로 연 `.md` 를 가져올지, 그 파일만 고칠지(S-11). 모르는 값은 `import` | `import` | F-2156 |
 | `md.lineBreaks` | `on` \| `off` — 보기 모드·HTML/PDF 내보내기·인쇄에서 한 번 줄바꿈을 `<br>` 로 그릴지(`off` 는 마크다운 표준). 모르는 값은 `on`. 공유 링크·공개 보기는 늘 `on`. 로그인하면 계정 `user_prefs` 값을 따름 | `on` | small 2026-10-22, 2026-11-04 |
 | `md.accountPrefsDirty` | 계정에 아직 못 올린 설정 키 배열 JSON(`["lineBreaks"]`). 올리면 비운다 | `[]` | small 2026-11-04 |
+| `md.arrowReplace` | `on` \| `off` — 편집기에서 `->` 를 `→` 로 바꿀지. 모르는 값은 `on`. 기기별 | `on` | small 2026-11-12 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/site/pageTheme.ts`)도 읽는다 (small 2026-10-12)

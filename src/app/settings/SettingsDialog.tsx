@@ -25,6 +25,7 @@ import type { KanbanSettings } from '../kanban/useKanbanSettings'
 import LocalFileOpenSetting from '../localFile/LocalFileOpenSetting'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../../e2ee/keyring'
 import { changeLineBreaks, useLineBreaks } from '../appearance/lineBreaksPref'
+import { changeArrowReplace, useArrowReplace } from '../appearance/arrowReplacePref'
 import { THEME_OPTIONS } from '../appearance/theme'
 import { DEFAULT_VIEW_OPTIONS } from '../appearance/defaultView'
 import {
@@ -83,6 +84,12 @@ const WIKI_PREVIEW_OPTIONS = [
 
 // 한 번 줄바꿈도 줄을 바꿔 보이기 (small 2026-10-22)
 const LINE_BREAKS_OPTIONS = [
+  { value: 'on', label: '켬' },
+  { value: 'off', label: '끔' },
+] as const
+
+// `->` 를 `→` 로 바꾸기 (small 2026-11-12)
+const ARROW_REPLACE_OPTIONS = [
   { value: 'on', label: '켬' },
   { value: 'off', label: '끔' },
 ] as const
@@ -432,6 +439,7 @@ export default function SettingsDialog({
   const phone = usePhoneWidth()
   const [docPickerOpen, setDocPickerOpen] = useState(false)
   const lineBreaks = useLineBreaks()
+  const arrowReplace = useArrowReplace()
 
   // 공개 보기 화면은 편집 항목을 안 준다 — 줄 때만 그린다 (F-230 2.2)
   const hasContentWidth = contentWidth !== undefined && onChangeContentWidth !== undefined
@@ -573,6 +581,14 @@ export default function SettingsDialog({
           {indent !== undefined && onChangeIndent !== undefined && (
             <SettingsCard title="입력">
               <Segment labelId="indent-label" label="들여쓰기" value={indent} options={INDENT_OPTIONS} onChange={onChangeIndent} />
+              <Segment
+                labelId="arrow-replace-label"
+                label="-> 를 → 로 바꾸기"
+                value={arrowReplace ? 'on' : 'off'}
+                options={ARROW_REPLACE_OPTIONS}
+                onChange={(v) => changeArrowReplace(v === 'on')}
+                inline
+              />
             </SettingsCard>
           )}
           {(showLineBreaks || hasWikiPreview) && (

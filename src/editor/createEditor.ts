@@ -10,6 +10,7 @@ import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemir
 
 import { anchorInBlock, ratioInBlock } from '../lib/scrollAnchor'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
+import { arrowReplace } from './arrowReplace'
 import { autoPair } from './autoPair'
 import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
 import { insertNewlineContinueList } from './listEnter'
@@ -445,6 +446,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     editorContextMenuHandler(notifyContextMenu),
     // autoPair() 의 Backspace 키맵(Prec.high)이 markdown() 의 deleteMarkupBackward(역시 Prec.high)보다 먼저 받으려면 더 앞서 조립해야 한다
     // (@codemirror/view keymap 문서: "specified early... get checked first")
+    arrowReplace(),
     autoPair(),
     // base: markdownLanguage — commonmark 기본값은 GFM 표를 못 읽는다(spike index.js 86~88행). extensions: frontmatterExtension() 없으면 lezer 가 첫 `---` 를 HorizontalRule 로 잘못 읽는다(F-133 3.2)
     // addKeymap:false — markdownKeymap 기본 Enter 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)

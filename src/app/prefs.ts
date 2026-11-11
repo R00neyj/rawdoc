@@ -73,6 +73,8 @@ type PrefMap = {
   'md.lineBreaks': 'on' | 'off'
   // 계정에 아직 못 올린 설정 키 배열(JSON), 기기별 (small 2026-11-04)
   'md.accountPrefsDirty': string
+  // 편집 중 `->` 를 `→` 로 바꿀지, 기기별 (small 2026-11-12)
+  'md.arrowReplace': 'on' | 'off'
 }
 
 type PrefKey = keyof PrefMap
@@ -130,6 +132,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.docTabs',
   'md.lineBreaks',
   'md.accountPrefsDirty',
+  'md.arrowReplace',
 ])
 
 function assertAllowed(key: string) {

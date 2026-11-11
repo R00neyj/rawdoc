@@ -60,12 +60,13 @@
 |`src/app/account/useAccountDelete.ts`|계정 삭제 예약과 남은 기간 안내, 취소를 처리함|
 |`src/app/account/useAccountStatus.ts`|계정 상태·이용 차단·경고 알림을 확인해 보여 줌|
 
-## `src/app/appearance/` 모양 설정 (5)
+## `src/app/appearance/` 모양 설정 (6)
 
 테마·본문 너비·줄바꿈 표시·시작 보기 같은 보기 설정
 
 |파일|하는 일|
 |---|---|
+|`src/app/appearance/arrowReplacePref.ts`|"`->` 를 `→` 로 바꾸기" 설정을 저장하고 편집기에 알려 줌|
 |`src/app/appearance/contentWidth.ts`|본문 최대 너비의 허용 범위와 저장값을 계산함|
 |`src/app/appearance/defaultView.ts`|문서를 열 때 처음 보일 보기 모드를 설정에 따라 정함|
 |`src/app/appearance/lineBreaksPref.ts`|"줄바꿈 한 번도 줄을 바꿔 보이기" 설정을 저장하고, 보기 모드·HTML 내보내기·인쇄가 그 값을 따르게 함|
@@ -586,12 +587,13 @@
 |`src/app/wiki/wikiPreview.ts`|문서 연결 링크에 마우스를 올리면 뜨는 미리보기 규칙을 정함|
 |`src/app/wiki/WikiRenameDialog.tsx`|제목을 바꾼 뒤 옛 제목 링크를 함께 고칠지 묻는 확인 창|
 
-## `src/editor/` 편집기 (34)
+## `src/editor/` 편집기 (35)
 
 글을 쓰는 본문 칸. 마크다운 기호를 지우지 않고 꾸며 보여 줌
 
 |파일|하는 일|
 |---|---|
+|`src/editor/arrowReplace.ts`|편집기에서 `->` 를 치면 `→` 로 바꾸고, 바로 지우면 `->` 로 되돌림|
 |`src/editor/autoPair.ts`|괄호나 `**` 같은 짝 기호를 자동으로 닫아 줌|
 |`src/editor/blockCommands.ts`|우클릭 메뉴로 줄을 목록·제목·일반 문단으로 바꿈|
 |`src/editor/boardComposition.ts`|칸반 보드 입력칸에서 한글을 조합하는 중인지 알려 남의 수정을 잠시 미루게 함 (F-2141)|
